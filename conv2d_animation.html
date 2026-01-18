@@ -1,0 +1,467 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Conv2D Animation</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+            background: #fff;
+            padding: 20px;
+            color: #333;
+        }
+        h1 {
+            text-align: center;
+            margin-bottom: 20px;
+            font-weight: 500;
+        }
+        .container {
+            display: flex;
+            flex-wrap: wrap;
+            justify-content: center;
+            gap: 40px;
+            margin-bottom: 20px;
+        }
+        .matrix-container {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+        }
+        .matrix-label {
+            font-size: 14px;
+            margin-bottom: 8px;
+            color: #666;
+        }
+        .matrix {
+            display: grid;
+            gap: 1px;
+            background: #ddd;
+            padding: 1px;
+        }
+        .cell {
+            width: 36px;
+            height: 36px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 12px;
+            background: #f5f5f5;
+        }
+        .input-cell.highlight {
+            background: #ffcccc;
+        }
+        .kernel-cell {
+            background: #e0e0e0;
+        }
+        .kernel-cell.active {
+            background: #ccc;
+        }
+        .output-cell.current {
+            background: #ffffcc;
+        }
+        .output-cell.computed {
+            background: #ccffcc;
+        }
+        .controls {
+            display: flex;
+            justify-content: center;
+            gap: 10px;
+            margin-bottom: 20px;
+            flex-wrap: wrap;
+            align-items: center;
+        }
+        button {
+            padding: 8px 16px;
+            font-size: 14px;
+            border: 1px solid #ccc;
+            border-radius: 4px;
+            cursor: pointer;
+            background: #fff;
+        }
+        button:hover {
+            background: #f0f0f0;
+        }
+        .speed-control {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            font-size: 14px;
+            color: #666;
+        }
+        .speed-control input {
+            width: 80px;
+        }
+        .calculation {
+            text-align: center;
+            padding: 15px;
+            background: #f9f9f9;
+            border: 1px solid #eee;
+            margin: 20px auto;
+            max-width: 700px;
+            font-family: monospace;
+            font-size: 13px;
+            line-height: 1.6;
+        }
+        .calculation .result {
+            font-weight: bold;
+            margin-top: 5px;
+        }
+        .info {
+            text-align: center;
+            margin-top: 15px;
+            color: #999;
+            font-size: 12px;
+        }
+        .settings {
+            display: flex;
+            justify-content: center;
+            gap: 15px;
+            margin-bottom: 20px;
+            flex-wrap: wrap;
+            align-items: center;
+        }
+        .setting-group {
+            display: flex;
+            align-items: center;
+            gap: 5px;
+            font-size: 14px;
+        }
+        .setting-group label {
+            color: #666;
+        }
+        .setting-group select {
+            padding: 6px;
+            border: 1px solid #ccc;
+            border-radius: 4px;
+            background: #fff;
+        }
+    </style>
+</head>
+<body>
+    <h1>Conv2D Animation</h1>
+
+    <div class="settings">
+        <div class="setting-group">
+            <label>Input:</label>
+            <select id="inputSize">
+                <option value="5">5x5</option>
+                <option value="6">6x6</option>
+                <option value="7" selected>7x7</option>
+                <option value="8">8x8</option>
+                <option value="9">9x9</option>
+                <option value="10">10x10</option>
+            </select>
+        </div>
+        <div class="setting-group">
+            <label>Kernel:</label>
+            <select id="kernelSize">
+                <option value="2">2x2</option>
+                <option value="3" selected>3x3</option>
+                <option value="4">4x4</option>
+            </select>
+        </div>
+        <div class="setting-group">
+            <label>Stride:</label>
+            <select id="stride">
+                <option value="1" selected>1</option>
+                <option value="2">2</option>
+            </select>
+        </div>
+        <button onclick="initializeMatrices()">Apply</button>
+    </div>
+
+    <div class="controls">
+        <button id="playBtn" onclick="togglePlay()">Play</button>
+        <button id="stepBtn" onclick="step()">Step</button>
+        <button id="resetBtn" onclick="reset()">Reset</button>
+        <div class="speed-control">
+            <label>Speed:</label>
+            <input type="range" id="speed" min="100" max="1500" value="700">
+        </div>
+    </div>
+
+    <div class="container">
+        <div class="matrix-container">
+            <div class="matrix-label">Input</div>
+            <div id="inputMatrix" class="matrix"></div>
+        </div>
+        <div class="matrix-container">
+            <div class="matrix-label">Kernel</div>
+            <div id="kernelMatrix" class="matrix"></div>
+        </div>
+        <div class="matrix-container">
+            <div class="matrix-label">Output</div>
+            <div id="outputMatrix" class="matrix"></div>
+        </div>
+    </div>
+
+    <div class="calculation" id="calculation">
+        Click "Play" or "Step" to start.
+    </div>
+
+    <div class="info">
+        Output size = (Input - Kernel) / Stride + 1
+    </div>
+
+    <script>
+        let inputData = [];
+        let kernelData = [];
+        let outputData = [];
+        let inputSize = 7;
+        let kernelSizeVal = 3;
+        let strideVal = 1;
+        let outputSize = 0;
+        let currentRow = 0;
+        let currentCol = 0;
+        let isPlaying = false;
+        let intervalId = null;
+
+        function generateRandomMatrix(rows, cols, max = 9) {
+            const matrix = [];
+            for (let i = 0; i < rows; i++) {
+                matrix[i] = [];
+                for (let j = 0; j < cols; j++) {
+                    matrix[i][j] = Math.floor(Math.random() * (max + 1));
+                }
+            }
+            return matrix;
+        }
+
+        function generateKernel(size) {
+            const kernels = {
+                2: [[1, 0], [0, 1]],
+                3: [[1, 0, -1], [2, 0, -2], [1, 0, -1]],
+                4: [[1, 1, 1, 1], [1, 2, 2, 1], [1, 2, 2, 1], [1, 1, 1, 1]]
+            };
+            return kernels[size] || generateRandomMatrix(size, size, 2);
+        }
+
+        function initializeMatrices() {
+            inputSize = parseInt(document.getElementById('inputSize').value);
+            kernelSizeVal = parseInt(document.getElementById('kernelSize').value);
+            strideVal = parseInt(document.getElementById('stride').value);
+
+            outputSize = Math.floor((inputSize - kernelSizeVal) / strideVal) + 1;
+
+            if (outputSize < 1) {
+                alert('Invalid configuration');
+                return;
+            }
+
+            inputData = generateRandomMatrix(inputSize, inputSize);
+            kernelData = generateKernel(kernelSizeVal);
+            outputData = [];
+            for (let i = 0; i < outputSize; i++) {
+                outputData[i] = [];
+                for (let j = 0; j < outputSize; j++) {
+                    outputData[i][j] = null;
+                }
+            }
+
+            renderMatrices();
+            reset();
+        }
+
+        function renderMatrices() {
+            const inputMatrix = document.getElementById('inputMatrix');
+            inputMatrix.style.gridTemplateColumns = `repeat(${inputSize}, 36px)`;
+            inputMatrix.innerHTML = '';
+            for (let i = 0; i < inputSize; i++) {
+                for (let j = 0; j < inputSize; j++) {
+                    const cell = document.createElement('div');
+                    cell.className = 'cell input-cell';
+                    cell.id = `input-${i}-${j}`;
+                    cell.textContent = inputData[i][j];
+                    inputMatrix.appendChild(cell);
+                }
+            }
+
+            const kernelMatrix = document.getElementById('kernelMatrix');
+            kernelMatrix.style.gridTemplateColumns = `repeat(${kernelSizeVal}, 36px)`;
+            kernelMatrix.innerHTML = '';
+            for (let i = 0; i < kernelSizeVal; i++) {
+                for (let j = 0; j < kernelSizeVal; j++) {
+                    const cell = document.createElement('div');
+                    cell.className = 'cell kernel-cell';
+                    cell.id = `kernel-${i}-${j}`;
+                    cell.textContent = kernelData[i][j];
+                    kernelMatrix.appendChild(cell);
+                }
+            }
+
+            const outputMatrix = document.getElementById('outputMatrix');
+            outputMatrix.style.gridTemplateColumns = `repeat(${outputSize}, 36px)`;
+            outputMatrix.innerHTML = '';
+            for (let i = 0; i < outputSize; i++) {
+                for (let j = 0; j < outputSize; j++) {
+                    const cell = document.createElement('div');
+                    cell.className = 'cell output-cell';
+                    cell.id = `output-${i}-${j}`;
+                    cell.textContent = outputData[i][j] !== null ? outputData[i][j] : '?';
+                    outputMatrix.appendChild(cell);
+                }
+            }
+        }
+
+        function highlightCurrentPosition() {
+            document.querySelectorAll('.input-cell').forEach(cell => {
+                cell.classList.remove('highlight');
+            });
+            document.querySelectorAll('.kernel-cell').forEach(cell => {
+                cell.classList.remove('active');
+            });
+            document.querySelectorAll('.output-cell').forEach(cell => {
+                cell.classList.remove('current');
+            });
+
+            const startRow = currentRow * strideVal;
+            const startCol = currentCol * strideVal;
+            for (let i = 0; i < kernelSizeVal; i++) {
+                for (let j = 0; j < kernelSizeVal; j++) {
+                    const cell = document.getElementById(`input-${startRow + i}-${startCol + j}`);
+                    if (cell) cell.classList.add('highlight');
+                }
+            }
+
+            document.querySelectorAll('.kernel-cell').forEach(cell => {
+                cell.classList.add('active');
+            });
+
+            const outputCell = document.getElementById(`output-${currentRow}-${currentCol}`);
+            if (outputCell) outputCell.classList.add('current');
+        }
+
+        function computeConvolution() {
+            const startRow = currentRow * strideVal;
+            const startCol = currentCol * strideVal;
+            let sum = 0;
+            let formulaParts = [];
+
+            for (let i = 0; i < kernelSizeVal; i++) {
+                for (let j = 0; j < kernelSizeVal; j++) {
+                    const inputVal = inputData[startRow + i][startCol + j];
+                    const kernelVal = kernelData[i][j];
+                    sum += inputVal * kernelVal;
+                    formulaParts.push(`${inputVal}*${kernelVal}`);
+                }
+            }
+
+            return { sum, formulaParts };
+        }
+
+        function updateCalculation() {
+            const { sum, formulaParts } = computeConvolution();
+            const calcDiv = document.getElementById('calculation');
+
+            const linesCount = kernelSizeVal;
+            let formulaLines = [];
+            for (let i = 0; i < linesCount; i++) {
+                const start = i * kernelSizeVal;
+                const end = start + kernelSizeVal;
+                formulaLines.push(formulaParts.slice(start, end).join(' + '));
+            }
+
+            calcDiv.innerHTML = `
+                <div>Output[${currentRow}][${currentCol}]</div>
+                <div>${formulaLines.join(' + ')}</div>
+                <div class="result">= ${sum}</div>
+            `;
+        }
+
+        function step() {
+            if (currentRow >= outputSize) {
+                document.getElementById('calculation').innerHTML = '<div class="result">Complete</div>';
+                stopPlay();
+                return false;
+            }
+
+            highlightCurrentPosition();
+            updateCalculation();
+
+            const { sum } = computeConvolution();
+            outputData[currentRow][currentCol] = sum;
+
+            const outputCell = document.getElementById(`output-${currentRow}-${currentCol}`);
+            outputCell.textContent = sum;
+            outputCell.classList.add('computed');
+
+            currentCol++;
+            if (currentCol >= outputSize) {
+                currentCol = 0;
+                currentRow++;
+            }
+
+            return currentRow < outputSize;
+        }
+
+        function togglePlay() {
+            if (isPlaying) {
+                stopPlay();
+            } else {
+                startPlay();
+            }
+        }
+
+        function startPlay() {
+            isPlaying = true;
+            document.getElementById('playBtn').textContent = 'Pause';
+            const speed = 1600 - parseInt(document.getElementById('speed').value);
+            intervalId = setInterval(() => {
+                if (!step()) {
+                    stopPlay();
+                }
+            }, speed);
+        }
+
+        function stopPlay() {
+            isPlaying = false;
+            document.getElementById('playBtn').textContent = 'Play';
+            if (intervalId) {
+                clearInterval(intervalId);
+                intervalId = null;
+            }
+        }
+
+        function reset() {
+            stopPlay();
+            currentRow = 0;
+            currentCol = 0;
+
+            for (let i = 0; i < outputSize; i++) {
+                for (let j = 0; j < outputSize; j++) {
+                    outputData[i][j] = null;
+                }
+            }
+
+            const outputMatrix = document.getElementById('outputMatrix');
+            outputMatrix.innerHTML = '';
+            for (let i = 0; i < outputSize; i++) {
+                for (let j = 0; j < outputSize; j++) {
+                    const cell = document.createElement('div');
+                    cell.className = 'cell output-cell';
+                    cell.id = `output-${i}-${j}`;
+                    cell.textContent = '?';
+                    outputMatrix.appendChild(cell);
+                }
+            }
+
+            document.querySelectorAll('.input-cell').forEach(cell => {
+                cell.classList.remove('highlight');
+            });
+            document.querySelectorAll('.kernel-cell').forEach(cell => {
+                cell.classList.remove('active');
+            });
+
+            document.getElementById('calculation').innerHTML = 'Click "Play" or "Step" to start.';
+        }
+
+        window.onload = initializeMatrices;
+    </script>
+</body>
+</html>

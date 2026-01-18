@@ -1,0 +1,916 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Multi-Head Self-Attention Animation</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+            background: #fff;
+            padding: 20px;
+            color: #333;
+        }
+        h1 {
+            text-align: center;
+            margin-bottom: 20px;
+            font-weight: 500;
+        }
+        .settings {
+            display: flex;
+            justify-content: center;
+            gap: 15px;
+            margin-bottom: 20px;
+            flex-wrap: wrap;
+            align-items: center;
+        }
+        .setting-group {
+            display: flex;
+            align-items: center;
+            gap: 5px;
+            font-size: 14px;
+        }
+        .setting-group label {
+            color: #666;
+        }
+        .setting-group select {
+            padding: 6px;
+            border: 1px solid #ccc;
+            border-radius: 4px;
+            background: #fff;
+        }
+        .controls {
+            display: flex;
+            justify-content: center;
+            gap: 10px;
+            margin-bottom: 20px;
+            flex-wrap: wrap;
+            align-items: center;
+        }
+        button {
+            padding: 8px 16px;
+            font-size: 14px;
+            border: 1px solid #ccc;
+            border-radius: 4px;
+            cursor: pointer;
+            background: #fff;
+        }
+        button:hover {
+            background: #f0f0f0;
+        }
+        .speed-control {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            font-size: 14px;
+            color: #666;
+        }
+        .speed-control input {
+            width: 80px;
+        }
+        .phase-indicator {
+            text-align: center;
+            padding: 10px;
+            background: #f0f0f0;
+            border-radius: 4px;
+            margin-bottom: 10px;
+            font-size: 14px;
+        }
+        .params-info {
+            text-align: center;
+            padding: 8px;
+            background: #fff8dc;
+            border: 1px solid #eee;
+            border-radius: 4px;
+            margin-bottom: 20px;
+            font-size: 14px;
+            font-family: monospace;
+        }
+        .params-info span {
+            font-weight: bold;
+        }
+        .main-container {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: 25px;
+        }
+        .row {
+            display: flex;
+            justify-content: center;
+            gap: 30px;
+            flex-wrap: wrap;
+        }
+        .matrix-container {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+        }
+        .matrix-label {
+            font-size: 12px;
+            margin-bottom: 5px;
+            color: #666;
+        }
+        .matrix {
+            display: grid;
+            gap: 1px;
+            background: #ddd;
+            padding: 1px;
+        }
+        .cell {
+            width: 36px;
+            height: 24px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 10px;
+            background: #f5f5f5;
+        }
+        .input-cell { background: #f5f5f5; }
+        .input-cell.highlight { background: #ffcccc; }
+
+        /* Head colors */
+        .head-0 { background: #e8f4e8; }
+        .head-0.highlight { background: #c8e8c8; }
+        .head-0.computed { background: #a8d8a8; }
+
+        .head-1 { background: #e8e8f4; }
+        .head-1.highlight { background: #c8c8e8; }
+        .head-1.computed { background: #a8a8d8; }
+
+        .head-2 { background: #f4e8f4; }
+        .head-2.highlight { background: #e8c8e8; }
+        .head-2.computed { background: #d8a8d8; }
+
+        .head-3 { background: #f4f4e8; }
+        .head-3.highlight { background: #e8e8c8; }
+        .head-3.computed { background: #d8d8a8; }
+
+        .score-cell { background: #f5f5f5; }
+        .score-cell.highlight { background: #ffffcc; }
+        .score-cell.computed { background: #fff8dc; }
+
+        .attn-cell { background: #f5f5f5; }
+        .attn-cell.computed { background: #ffe4b5; }
+
+        .concat-cell { background: #e0e0e0; }
+        .concat-cell.computed { background: #ccc; }
+
+        .output-cell { background: #f5f5f5; }
+        .output-cell.highlight { background: #ffffcc; }
+        .output-cell.computed { background: #ccffcc; }
+
+        .wo-cell { background: #ddd; }
+
+        .head-section {
+            border: 1px solid #ddd;
+            border-radius: 8px;
+            padding: 15px;
+            margin: 5px;
+            background: #fafafa;
+        }
+        .head-title {
+            text-align: center;
+            font-size: 13px;
+            font-weight: 500;
+            margin-bottom: 10px;
+            color: #555;
+        }
+        .head-row {
+            display: flex;
+            gap: 15px;
+            justify-content: center;
+            flex-wrap: wrap;
+        }
+        .arrow {
+            font-size: 20px;
+            color: #999;
+            display: flex;
+            align-items: center;
+        }
+        .section-label {
+            text-align: center;
+            font-size: 14px;
+            color: #666;
+            margin: 10px 0;
+            font-weight: 500;
+        }
+        .calculation {
+            text-align: center;
+            padding: 15px;
+            background: #f9f9f9;
+            border: 1px solid #eee;
+            margin: 20px auto;
+            max-width: 900px;
+            font-family: monospace;
+            font-size: 12px;
+            line-height: 1.6;
+        }
+        .calculation .step-name {
+            font-weight: bold;
+            margin-bottom: 5px;
+        }
+        .calculation .result {
+            font-weight: bold;
+            margin-top: 5px;
+        }
+        .info {
+            text-align: center;
+            margin-top: 15px;
+            color: #999;
+            font-size: 12px;
+        }
+
+        /* 解説セクション */
+        .explanation {
+            max-width: 900px;
+            margin: 40px auto;
+            padding: 20px;
+            border-top: 1px solid #eee;
+        }
+        .explanation h2 {
+            font-size: 20px;
+            font-weight: 500;
+            margin-bottom: 15px;
+            color: #333;
+        }
+        .explanation h3 {
+            font-size: 16px;
+            font-weight: 500;
+            margin: 20px 0 10px 0;
+            color: #444;
+        }
+        .explanation p {
+            font-size: 14px;
+            line-height: 1.7;
+            color: #555;
+            margin-bottom: 10px;
+        }
+        .explanation ul {
+            font-size: 14px;
+            line-height: 1.7;
+            color: #555;
+            margin-left: 20px;
+        }
+        .explanation li {
+            margin-bottom: 5px;
+        }
+        .formula-box {
+            background: #f5f5f5;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+            padding: 15px;
+            text-align: center;
+            margin: 15px 0;
+            font-family: monospace;
+            font-size: 14px;
+        }
+        .phase-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+            gap: 15px;
+            margin: 15px 0;
+        }
+        .phase-box {
+            background: #f9f9f9;
+            border: 1px solid #eee;
+            border-radius: 4px;
+            padding: 15px;
+        }
+        .phase-box h4 {
+            font-size: 14px;
+            font-weight: 500;
+            margin-bottom: 8px;
+            color: #555;
+        }
+    </style>
+</head>
+<body>
+    <h1>Multi-Head Self-Attention Animation</h1>
+
+    <div class="settings">
+        <div class="setting-group">
+            <label>Seq Length:</label>
+            <select id="seqLength">
+                <option value="3">3</option>
+                <option value="4" selected>4</option>
+                <option value="5">5</option>
+            </select>
+        </div>
+        <div class="setting-group">
+            <label>d_model:</label>
+            <select id="dModel">
+                <option value="4">4</option>
+                <option value="6">6</option>
+                <option value="8" selected>8</option>
+            </select>
+        </div>
+        <div class="setting-group">
+            <label>Num Heads:</label>
+            <select id="numHeads">
+                <option value="2" selected>2</option>
+                <option value="4">4</option>
+            </select>
+        </div>
+        <button onclick="initialize()">Apply</button>
+    </div>
+
+    <div class="controls">
+        <button id="playBtn" onclick="togglePlay()">Play</button>
+        <button id="stepBtn" onclick="step()">Step</button>
+        <button id="resetBtn" onclick="reset()">Reset</button>
+        <div class="speed-control">
+            <label>Speed:</label>
+            <input type="range" id="speed" min="100" max="1500" value="600">
+        </div>
+    </div>
+
+    <div class="phase-indicator" id="phaseIndicator">
+        Click "Play" or "Step" to start.
+    </div>
+
+    <div class="params-info" id="paramsInfo">
+        d_model = <span id="dModelValue">8</span>,
+        num_heads = <span id="numHeadsValue">2</span>,
+        d_k = d_model / num_heads = <span id="dkValue">4</span>,
+        √d_k = <span id="sqrtDkValue">2.00</span>
+    </div>
+
+    <div class="main-container">
+        <!-- Input -->
+        <div class="section-label">Input</div>
+        <div class="row">
+            <div class="matrix-container">
+                <div class="matrix-label">X (seq × d_model)</div>
+                <div id="inputMatrix" class="matrix"></div>
+            </div>
+        </div>
+
+        <!-- Heads -->
+        <div class="section-label">Attention Heads (parallel)</div>
+        <div class="row" id="headsContainer"></div>
+
+        <!-- Concat -->
+        <div class="section-label">Concatenate & Project</div>
+        <div class="row">
+            <div class="matrix-container">
+                <div class="matrix-label">Concat</div>
+                <div id="concatMatrix" class="matrix"></div>
+            </div>
+            <div class="arrow">×</div>
+            <div class="matrix-container">
+                <div class="matrix-label">Wo</div>
+                <div id="woMatrix" class="matrix"></div>
+            </div>
+            <div class="arrow">=</div>
+            <div class="matrix-container">
+                <div class="matrix-label">Output</div>
+                <div id="outputMatrix" class="matrix"></div>
+            </div>
+        </div>
+    </div>
+
+    <div class="calculation" id="calculation">
+        MultiHead(Q,K,V) = Concat(head_1, ..., head_h) × Wo
+    </div>
+
+    <div class="info">
+        Each head attends to different aspects of the input
+    </div>
+
+    <!-- 解説セクション -->
+    <div class="explanation">
+        <h2>Multi-Head Self-Attentionとは</h2>
+        <p>
+            Multi-Head Attention は、複数の Attention Head を並列に実行し、
+            それぞれが異なる部分空間で情報を抽出します。
+            これにより、モデルは入力の様々な側面に同時に注目できます。
+        </p>
+
+        <h3>処理の流れ</h3>
+        <div class="phase-grid">
+            <div class="phase-box">
+                <h4>Phase 1: 各ヘッドでQ, K, V生成</h4>
+                <p>入力Xを各ヘッド専用のWq, Wk, Wvで変換。</p>
+                <p>各ヘッドの次元: d_k = d_model / num_heads</p>
+            </div>
+            <div class="phase-box">
+                <h4>Phase 2: Attention計算</h4>
+                <p>各ヘッドで独立にSelf-Attentionを計算。</p>
+                <p>Score = Q·K^T / √d_k → Softmax → ×V</p>
+            </div>
+            <div class="phase-box">
+                <h4>Phase 3: Concat</h4>
+                <p>全ヘッドの出力を連結。</p>
+                <p>サイズ: seq × d_model</p>
+            </div>
+            <div class="phase-box">
+                <h4>Phase 4: 出力射影</h4>
+                <p>連結した結果にWoを掛けて最終出力。</p>
+                <p>Output = Concat × Wo</p>
+            </div>
+        </div>
+
+        <h3>数式</h3>
+        <div class="formula-box">
+            MultiHead(Q, K, V) = Concat(head_1, ..., head_h) · Wo<br>
+            where head_i = Attention(X·Wq_i, X·Wk_i, X·Wv_i)
+        </div>
+
+        <h3>なぜ複数のヘッドを使うのか</h3>
+        <ul>
+            <li><strong>多様な表現</strong>: 各ヘッドが異なるパターン（構文、意味、位置関係など）を学習</li>
+            <li><strong>表現力の向上</strong>: 単一のAttentionより豊かな特徴を捉えられる</li>
+            <li><strong>計算効率</strong>: 次元を分割するため、計算量は単一Attentionとほぼ同じ</li>
+        </ul>
+    </div>
+
+    <script>
+        let seqLen = 4;
+        let dModel = 8;
+        let numHeads = 2;
+        let dK = 4;
+
+        let inputData = [];
+        let heads = []; // Each head: { Wq, Wk, Wv, Q, K, V, scores, attn, output }
+        let Wo = [];
+        let concatOutput = [];
+        let finalOutput = [];
+
+        let phase = 0;
+        let currentHead = 0;
+        let currentRow = 0;
+        let currentCol = 0;
+        let subPhase = 0; // 0: QKV, 1: scores, 2: softmax, 3: head output
+        let isPlaying = false;
+        let intervalId = null;
+
+        function randomMatrix(rows, cols, scale = 1) {
+            const m = [];
+            for (let i = 0; i < rows; i++) {
+                m[i] = [];
+                for (let j = 0; j < cols; j++) {
+                    m[i][j] = Math.round((Math.random() * 2 - 1) * scale * 10) / 10;
+                }
+            }
+            return m;
+        }
+
+        function nullMatrix(rows, cols) {
+            const m = [];
+            for (let i = 0; i < rows; i++) {
+                m[i] = [];
+                for (let j = 0; j < cols; j++) {
+                    m[i][j] = null;
+                }
+            }
+            return m;
+        }
+
+        function matmul(A, B) {
+            const rowsA = A.length;
+            const colsA = A[0].length;
+            const colsB = B[0].length;
+            const C = [];
+            for (let i = 0; i < rowsA; i++) {
+                C[i] = [];
+                for (let j = 0; j < colsB; j++) {
+                    let sum = 0;
+                    for (let k = 0; k < colsA; k++) {
+                        sum += A[i][k] * B[k][j];
+                    }
+                    C[i][j] = Math.round(sum * 100) / 100;
+                }
+            }
+            return C;
+        }
+
+        function softmax(arr) {
+            const max = Math.max(...arr);
+            const exps = arr.map(x => Math.exp(x - max));
+            const sum = exps.reduce((a, b) => a + b, 0);
+            return exps.map(e => Math.round(e / sum * 100) / 100);
+        }
+
+        function initialize() {
+            seqLen = parseInt(document.getElementById('seqLength').value);
+            dModel = parseInt(document.getElementById('dModel').value);
+            numHeads = parseInt(document.getElementById('numHeads').value);
+            dK = dModel / numHeads;
+
+            // Validate
+            if (dModel % numHeads !== 0) {
+                alert('d_model must be divisible by num_heads');
+                return;
+            }
+
+            // Update params display
+            document.getElementById('dModelValue').textContent = dModel;
+            document.getElementById('numHeadsValue').textContent = numHeads;
+            document.getElementById('dkValue').textContent = dK;
+            document.getElementById('sqrtDkValue').textContent = Math.sqrt(dK).toFixed(2);
+
+            inputData = randomMatrix(seqLen, dModel, 1);
+
+            // Initialize heads
+            heads = [];
+            for (let h = 0; h < numHeads; h++) {
+                heads.push({
+                    Wq: randomMatrix(dModel, dK, 0.5),
+                    Wk: randomMatrix(dModel, dK, 0.5),
+                    Wv: randomMatrix(dModel, dK, 0.5),
+                    Q: nullMatrix(seqLen, dK),
+                    K: nullMatrix(seqLen, dK),
+                    V: nullMatrix(seqLen, dK),
+                    scores: nullMatrix(seqLen, seqLen),
+                    attn: nullMatrix(seqLen, seqLen),
+                    output: nullMatrix(seqLen, dK)
+                });
+            }
+
+            Wo = randomMatrix(dModel, dModel, 0.5);
+            concatOutput = nullMatrix(seqLen, dModel);
+            finalOutput = nullMatrix(seqLen, dModel);
+
+            renderAll();
+            reset();
+        }
+
+        function renderMatrix(container, data, cellClass, cols) {
+            container.style.gridTemplateColumns = `repeat(${cols}, 36px)`;
+            container.innerHTML = '';
+            for (let i = 0; i < data.length; i++) {
+                for (let j = 0; j < data[i].length; j++) {
+                    const cell = document.createElement('div');
+                    cell.className = `cell ${cellClass}`;
+                    cell.dataset.row = i;
+                    cell.dataset.col = j;
+                    cell.textContent = data[i][j] !== null ? data[i][j] : '?';
+                    container.appendChild(cell);
+                }
+            }
+        }
+
+        function renderHeads() {
+            const container = document.getElementById('headsContainer');
+            container.innerHTML = '';
+
+            for (let h = 0; h < numHeads; h++) {
+                const head = heads[h];
+                const section = document.createElement('div');
+                section.className = 'head-section';
+                section.id = `head-${h}`;
+                section.innerHTML = `
+                    <div class="head-title">Head ${h + 1}</div>
+                    <div class="head-row">
+                        <div class="matrix-container">
+                            <div class="matrix-label">Q</div>
+                            <div id="q-${h}" class="matrix"></div>
+                        </div>
+                        <div class="matrix-container">
+                            <div class="matrix-label">K</div>
+                            <div id="k-${h}" class="matrix"></div>
+                        </div>
+                        <div class="matrix-container">
+                            <div class="matrix-label">V</div>
+                            <div id="v-${h}" class="matrix"></div>
+                        </div>
+                    </div>
+                    <div class="head-row" style="margin-top:10px;">
+                        <div class="matrix-container">
+                            <div class="matrix-label">Scores</div>
+                            <div id="scores-${h}" class="matrix"></div>
+                        </div>
+                        <div class="arrow">→</div>
+                        <div class="matrix-container">
+                            <div class="matrix-label">Attn</div>
+                            <div id="attn-${h}" class="matrix"></div>
+                        </div>
+                        <div class="arrow">→</div>
+                        <div class="matrix-container">
+                            <div class="matrix-label">Out</div>
+                            <div id="out-${h}" class="matrix"></div>
+                        </div>
+                    </div>
+                `;
+                container.appendChild(section);
+
+                // Render matrices
+                renderMatrix(document.getElementById(`q-${h}`), head.Q, `head-${h}`, dK);
+                renderMatrix(document.getElementById(`k-${h}`), head.K, `head-${h}`, dK);
+                renderMatrix(document.getElementById(`v-${h}`), head.V, `head-${h}`, dK);
+                renderMatrix(document.getElementById(`scores-${h}`), head.scores, 'score-cell', seqLen);
+                renderMatrix(document.getElementById(`attn-${h}`), head.attn, 'attn-cell', seqLen);
+                renderMatrix(document.getElementById(`out-${h}`), head.output, `head-${h}`, dK);
+            }
+        }
+
+        function renderAll() {
+            renderMatrix(document.getElementById('inputMatrix'), inputData, 'input-cell', dModel);
+            renderHeads();
+            renderMatrix(document.getElementById('concatMatrix'), concatOutput, 'concat-cell', dModel);
+            renderMatrix(document.getElementById('woMatrix'), Wo, 'wo-cell', dModel);
+            renderMatrix(document.getElementById('outputMatrix'), finalOutput, 'output-cell', dModel);
+        }
+
+        function clearHighlights() {
+            document.querySelectorAll('.cell').forEach(cell => {
+                cell.classList.remove('highlight');
+            });
+        }
+
+        function step() {
+            clearHighlights();
+
+            // Phase 1: Compute Q, K, V for each head
+            if (phase === 0) {
+                phase = 1;
+                currentHead = 0;
+                currentRow = 0;
+                subPhase = 0;
+            }
+
+            if (phase === 1) {
+                // Computing Q, K, V for current head
+                const head = heads[currentHead];
+                document.getElementById('phaseIndicator').textContent =
+                    `Phase 1: Head ${currentHead + 1} - Computing Q, K, V (row ${currentRow + 1}/${seqLen})`;
+
+                // Compute full Q, K, V
+                const Qfull = matmul(inputData, head.Wq);
+                const Kfull = matmul(inputData, head.Wk);
+                const Vfull = matmul(inputData, head.Wv);
+
+                for (let j = 0; j < dK; j++) {
+                    head.Q[currentRow][j] = Qfull[currentRow][j];
+                    head.K[currentRow][j] = Kfull[currentRow][j];
+                    head.V[currentRow][j] = Vfull[currentRow][j];
+                }
+
+                // Update display
+                renderMatrix(document.getElementById(`q-${currentHead}`), head.Q, `head-${currentHead}`, dK);
+                renderMatrix(document.getElementById(`k-${currentHead}`), head.K, `head-${currentHead}`, dK);
+                renderMatrix(document.getElementById(`v-${currentHead}`), head.V, `head-${currentHead}`, dK);
+
+                // Highlight
+                for (let j = 0; j < dK; j++) {
+                    document.getElementById(`q-${currentHead}`).children[currentRow * dK + j].classList.add('highlight');
+                    document.getElementById(`k-${currentHead}`).children[currentRow * dK + j].classList.add('highlight');
+                    document.getElementById(`v-${currentHead}`).children[currentRow * dK + j].classList.add('highlight');
+                }
+
+                document.getElementById('calculation').innerHTML = `
+                    <div class="step-name">Head ${currentHead + 1}: Q[${currentRow}] = X[${currentRow}]·Wq, K[${currentRow}] = X[${currentRow}]·Wk, V[${currentRow}] = X[${currentRow}]·Wv</div>
+                `;
+
+                currentRow++;
+                if (currentRow >= seqLen) {
+                    currentRow = 0;
+                    currentHead++;
+                    if (currentHead >= numHeads) {
+                        phase = 2;
+                        currentHead = 0;
+                        currentRow = 0;
+                        currentCol = 0;
+                    }
+                }
+                return true;
+            }
+
+            // Phase 2: Compute attention scores for each head
+            if (phase === 2) {
+                const head = heads[currentHead];
+                document.getElementById('phaseIndicator').textContent =
+                    `Phase 2: Head ${currentHead + 1} - Attention Scores`;
+
+                // Compute score
+                let dotProduct = 0;
+                for (let k = 0; k < dK; k++) {
+                    dotProduct += head.Q[currentRow][k] * head.K[currentCol][k];
+                }
+                const scale = Math.sqrt(dK);
+                const score = Math.round(dotProduct / scale * 100) / 100;
+                head.scores[currentRow][currentCol] = score;
+
+                renderMatrix(document.getElementById(`scores-${currentHead}`), head.scores, 'score-cell', seqLen);
+                document.getElementById(`scores-${currentHead}`).children[currentRow * seqLen + currentCol].classList.add('highlight');
+                document.getElementById(`scores-${currentHead}`).children[currentRow * seqLen + currentCol].classList.add('computed');
+
+                document.getElementById('calculation').innerHTML = `
+                    <div class="step-name">Head ${currentHead + 1}: Score[${currentRow}][${currentCol}] = Q[${currentRow}]·K[${currentCol}]^T / √${dK} = ${score}</div>
+                `;
+
+                currentCol++;
+                if (currentCol >= seqLen) {
+                    currentCol = 0;
+                    currentRow++;
+                }
+                if (currentRow >= seqLen) {
+                    currentRow = 0;
+                    currentHead++;
+                    if (currentHead >= numHeads) {
+                        phase = 3;
+                        currentHead = 0;
+                        currentRow = 0;
+                    }
+                }
+                return true;
+            }
+
+            // Phase 3: Softmax for each head
+            if (phase === 3) {
+                const head = heads[currentHead];
+                document.getElementById('phaseIndicator').textContent =
+                    `Phase 3: Head ${currentHead + 1} - Softmax (row ${currentRow + 1}/${seqLen})`;
+
+                const attn = softmax(head.scores[currentRow]);
+                head.attn[currentRow] = attn;
+
+                renderMatrix(document.getElementById(`attn-${currentHead}`), head.attn, 'attn-cell', seqLen);
+                for (let j = 0; j < seqLen; j++) {
+                    document.getElementById(`attn-${currentHead}`).children[currentRow * seqLen + j].classList.add('computed');
+                }
+
+                document.getElementById('calculation').innerHTML = `
+                    <div class="step-name">Head ${currentHead + 1}: Attn[${currentRow}] = softmax(Scores[${currentRow}]) = [${attn.join(', ')}]</div>
+                `;
+
+                currentRow++;
+                if (currentRow >= seqLen) {
+                    currentRow = 0;
+                    currentHead++;
+                    if (currentHead >= numHeads) {
+                        phase = 4;
+                        currentHead = 0;
+                        currentRow = 0;
+                    }
+                }
+                return true;
+            }
+
+            // Phase 4: Head output (Attn × V)
+            if (phase === 4) {
+                const head = heads[currentHead];
+                document.getElementById('phaseIndicator').textContent =
+                    `Phase 4: Head ${currentHead + 1} - Output (row ${currentRow + 1}/${seqLen})`;
+
+                for (let j = 0; j < dK; j++) {
+                    let sum = 0;
+                    for (let k = 0; k < seqLen; k++) {
+                        sum += head.attn[currentRow][k] * head.V[k][j];
+                    }
+                    head.output[currentRow][j] = Math.round(sum * 100) / 100;
+                }
+
+                renderMatrix(document.getElementById(`out-${currentHead}`), head.output, `head-${currentHead}`, dK);
+                for (let j = 0; j < dK; j++) {
+                    document.getElementById(`out-${currentHead}`).children[currentRow * dK + j].classList.add('highlight');
+                    document.getElementById(`out-${currentHead}`).children[currentRow * dK + j].classList.add('computed');
+                }
+
+                document.getElementById('calculation').innerHTML = `
+                    <div class="step-name">Head ${currentHead + 1}: Out[${currentRow}] = Attn[${currentRow}] × V = [${head.output[currentRow].join(', ')}]</div>
+                `;
+
+                currentRow++;
+                if (currentRow >= seqLen) {
+                    currentRow = 0;
+                    currentHead++;
+                    if (currentHead >= numHeads) {
+                        phase = 5;
+                        currentRow = 0;
+                    }
+                }
+                return true;
+            }
+
+            // Phase 5: Concatenate
+            if (phase === 5) {
+                document.getElementById('phaseIndicator').textContent =
+                    `Phase 5: Concatenating heads (row ${currentRow + 1}/${seqLen})`;
+
+                for (let h = 0; h < numHeads; h++) {
+                    for (let j = 0; j < dK; j++) {
+                        concatOutput[currentRow][h * dK + j] = heads[h].output[currentRow][j];
+                    }
+                }
+
+                renderMatrix(document.getElementById('concatMatrix'), concatOutput, 'concat-cell', dModel);
+                for (let j = 0; j < dModel; j++) {
+                    document.getElementById('concatMatrix').children[currentRow * dModel + j].classList.add('computed');
+                }
+
+                document.getElementById('calculation').innerHTML = `
+                    <div class="step-name">Concat[${currentRow}] = [Head1.Out[${currentRow}] | Head2.Out[${currentRow}] | ...]</div>
+                `;
+
+                currentRow++;
+                if (currentRow >= seqLen) {
+                    phase = 6;
+                    currentRow = 0;
+                }
+                return true;
+            }
+
+            // Phase 6: Final projection (Concat × Wo)
+            if (phase === 6) {
+                document.getElementById('phaseIndicator').textContent =
+                    `Phase 6: Output Projection (row ${currentRow + 1}/${seqLen})`;
+
+                const result = matmul(concatOutput, Wo);
+                for (let j = 0; j < dModel; j++) {
+                    finalOutput[currentRow][j] = result[currentRow][j];
+                }
+
+                renderMatrix(document.getElementById('outputMatrix'), finalOutput, 'output-cell', dModel);
+                for (let j = 0; j < dModel; j++) {
+                    document.getElementById('outputMatrix').children[currentRow * dModel + j].classList.add('computed');
+                    document.getElementById('outputMatrix').children[currentRow * dModel + j].classList.add('highlight');
+                }
+
+                document.getElementById('calculation').innerHTML = `
+                    <div class="step-name">Output[${currentRow}] = Concat[${currentRow}] × Wo</div>
+                    <div class="result">= [${finalOutput[currentRow].join(', ')}]</div>
+                `;
+
+                currentRow++;
+                if (currentRow >= seqLen) {
+                    phase = 7;
+                }
+                return true;
+            }
+
+            if (phase === 7) {
+                document.getElementById('phaseIndicator').textContent = 'Complete!';
+                document.getElementById('calculation').innerHTML =
+                    '<div class="result">Multi-Head Self-Attention Complete!</div>';
+                stopPlay();
+                return false;
+            }
+
+            return false;
+        }
+
+        function togglePlay() {
+            if (isPlaying) {
+                stopPlay();
+            } else {
+                startPlay();
+            }
+        }
+
+        function startPlay() {
+            isPlaying = true;
+            document.getElementById('playBtn').textContent = 'Pause';
+            const speed = 1600 - parseInt(document.getElementById('speed').value);
+            intervalId = setInterval(() => {
+                if (!step()) {
+                    stopPlay();
+                }
+            }, speed);
+        }
+
+        function stopPlay() {
+            isPlaying = false;
+            document.getElementById('playBtn').textContent = 'Play';
+            if (intervalId) {
+                clearInterval(intervalId);
+                intervalId = null;
+            }
+        }
+
+        function reset() {
+            stopPlay();
+            phase = 0;
+            currentHead = 0;
+            currentRow = 0;
+            currentCol = 0;
+            subPhase = 0;
+
+            for (let h = 0; h < numHeads; h++) {
+                heads[h].Q = nullMatrix(seqLen, dK);
+                heads[h].K = nullMatrix(seqLen, dK);
+                heads[h].V = nullMatrix(seqLen, dK);
+                heads[h].scores = nullMatrix(seqLen, seqLen);
+                heads[h].attn = nullMatrix(seqLen, seqLen);
+                heads[h].output = nullMatrix(seqLen, dK);
+            }
+            concatOutput = nullMatrix(seqLen, dModel);
+            finalOutput = nullMatrix(seqLen, dModel);
+
+            renderAll();
+            clearHighlights();
+
+            document.getElementById('phaseIndicator').textContent = 'Click "Play" or "Step" to start.';
+            document.getElementById('calculation').innerHTML = 'MultiHead(Q,K,V) = Concat(head_1, ..., head_h) × Wo';
+        }
+
+        window.onload = initialize;
+    </script>
+</body>
+</html>

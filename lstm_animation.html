@@ -1,0 +1,1026 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>LSTM Animation</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+            background: #fff;
+            padding: 20px;
+            color: #333;
+        }
+        h1 {
+            text-align: center;
+            margin-bottom: 20px;
+            font-weight: 500;
+        }
+        .settings {
+            display: flex;
+            justify-content: center;
+            gap: 15px;
+            margin-bottom: 20px;
+            flex-wrap: wrap;
+            align-items: center;
+        }
+        .setting-group {
+            display: flex;
+            align-items: center;
+            gap: 5px;
+            font-size: 14px;
+        }
+        .setting-group label {
+            color: #666;
+        }
+        .setting-group select {
+            padding: 6px;
+            border: 1px solid #ccc;
+            border-radius: 4px;
+            background: #fff;
+        }
+        .controls {
+            display: flex;
+            justify-content: center;
+            gap: 10px;
+            margin-bottom: 20px;
+            flex-wrap: wrap;
+            align-items: center;
+        }
+        button {
+            padding: 8px 16px;
+            font-size: 14px;
+            border: 1px solid #ccc;
+            border-radius: 4px;
+            cursor: pointer;
+            background: #fff;
+        }
+        button:hover {
+            background: #f0f0f0;
+        }
+        .speed-control {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            font-size: 14px;
+            color: #666;
+        }
+        .speed-control input {
+            width: 80px;
+        }
+        .phase-indicator {
+            text-align: center;
+            padding: 10px;
+            background: #f0f0f0;
+            border-radius: 4px;
+            margin-bottom: 10px;
+            font-size: 14px;
+        }
+        .time-indicator {
+            text-align: center;
+            padding: 8px;
+            background: #e8f4e8;
+            border: 1px solid #ccc;
+            border-radius: 4px;
+            margin-bottom: 20px;
+            font-size: 16px;
+            font-weight: 500;
+        }
+        .main-container {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: 20px;
+            max-width: 1000px;
+            margin: 0 auto;
+        }
+        .lstm-cell {
+            border: 2px solid #999;
+            border-radius: 12px;
+            padding: 20px;
+            background: #fafafa;
+            width: 100%;
+        }
+        .cell-title {
+            text-align: center;
+            font-size: 16px;
+            font-weight: 500;
+            margin-bottom: 15px;
+            color: #444;
+        }
+        .gates-row {
+            display: flex;
+            justify-content: center;
+            gap: 20px;
+            flex-wrap: wrap;
+            margin-bottom: 15px;
+        }
+        .gate-box {
+            border: 1px solid #ddd;
+            border-radius: 8px;
+            padding: 12px;
+            background: #fff;
+            min-width: 140px;
+            text-align: center;
+        }
+        .gate-title {
+            font-size: 12px;
+            color: #666;
+            margin-bottom: 8px;
+        }
+        .gate-formula {
+            font-size: 10px;
+            color: #999;
+            margin-bottom: 8px;
+            font-family: monospace;
+        }
+        .gate-value {
+            display: flex;
+            justify-content: center;
+            gap: 3px;
+        }
+        .value-cell {
+            width: 32px;
+            height: 28px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 11px;
+            background: #f5f5f5;
+            border: 1px solid #ddd;
+            border-radius: 3px;
+        }
+        .forget-gate .value-cell.computed { background: #ffcccc; }
+        .input-gate .value-cell.computed { background: #ccffcc; }
+        .cell-candidate .value-cell.computed { background: #ccccff; }
+        .output-gate .value-cell.computed { background: #ffffcc; }
+        .cell-state .value-cell.computed { background: #ffccff; }
+        .hidden-state .value-cell.computed { background: #ccffff; }
+        .value-cell.highlight {
+            border: 2px solid #333;
+            transform: scale(1.1);
+        }
+        .states-row {
+            display: flex;
+            justify-content: center;
+            gap: 40px;
+            flex-wrap: wrap;
+        }
+        .state-box {
+            border: 2px solid #888;
+            border-radius: 8px;
+            padding: 15px;
+            background: #fff;
+            min-width: 180px;
+            text-align: center;
+        }
+        .state-title {
+            font-size: 14px;
+            font-weight: 500;
+            color: #555;
+            margin-bottom: 10px;
+        }
+        .io-section {
+            display: flex;
+            justify-content: center;
+            gap: 60px;
+            flex-wrap: wrap;
+        }
+        .io-box {
+            text-align: center;
+        }
+        .io-title {
+            font-size: 13px;
+            color: #666;
+            margin-bottom: 8px;
+        }
+        .io-values {
+            display: flex;
+            gap: 3px;
+            justify-content: center;
+        }
+        .input-cell { background: #e8e8e8; }
+        .input-cell.active { background: #ffcccc; }
+        .prev-cell { background: #e0e0e0; }
+        .arrow-down {
+            text-align: center;
+            font-size: 24px;
+            color: #999;
+            margin: 10px 0;
+        }
+        .calculation {
+            text-align: center;
+            padding: 15px;
+            background: #f9f9f9;
+            border: 1px solid #eee;
+            margin: 20px auto;
+            max-width: 800px;
+            font-family: monospace;
+            font-size: 12px;
+            line-height: 1.8;
+        }
+        .calculation .step-name {
+            font-weight: bold;
+            margin-bottom: 5px;
+        }
+        .calculation .result {
+            font-weight: bold;
+            margin-top: 5px;
+        }
+        .sequence-display {
+            display: flex;
+            justify-content: center;
+            gap: 10px;
+            margin-bottom: 20px;
+            flex-wrap: wrap;
+        }
+        .seq-step {
+            padding: 8px 15px;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+            font-size: 13px;
+            background: #f5f5f5;
+        }
+        .seq-step.current {
+            background: #ffcccc;
+        }
+        .params-section {
+            border: 1px solid #ddd;
+            border-radius: 8px;
+            padding: 15px;
+            margin: 20px auto;
+            max-width: 1200px;
+            background: #fafafa;
+        }
+        .params-title {
+            text-align: center;
+            font-size: 14px;
+            font-weight: 500;
+            margin-bottom: 15px;
+            color: #555;
+            cursor: pointer;
+        }
+        .params-title:hover {
+            color: #333;
+        }
+        .params-content {
+            display: flex;
+            flex-wrap: wrap;
+            justify-content: center;
+            gap: 20px;
+        }
+        .param-box {
+            border: 1px solid #ddd;
+            border-radius: 6px;
+            padding: 10px;
+            background: #fff;
+            text-align: center;
+        }
+        .param-label {
+            font-size: 12px;
+            font-weight: 500;
+            color: #666;
+            margin-bottom: 8px;
+        }
+        .param-matrix {
+            display: grid;
+            gap: 1px;
+            background: #ddd;
+            padding: 1px;
+        }
+        .param-cell {
+            width: 32px;
+            height: 20px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 9px;
+            background: #f8f8f8;
+        }
+        .param-cell.wf { background: #ffe8e8; }
+        .param-cell.wi { background: #e8ffe8; }
+        .param-cell.wc { background: #e8e8ff; }
+        .param-cell.wo { background: #ffffe8; }
+        .param-cell.bias { background: #f0f0f0; }
+        .bias-row {
+            display: flex;
+            gap: 2px;
+            justify-content: center;
+            margin-top: 5px;
+        }
+        .dims-info {
+            text-align: center;
+            padding: 8px;
+            background: #fff8dc;
+            border: 1px solid #eee;
+            border-radius: 4px;
+            margin-bottom: 15px;
+            font-size: 13px;
+            font-family: monospace;
+        }
+        .dims-info span {
+            font-weight: bold;
+        }
+        .seq-step.done {
+            background: #ccffcc;
+            border-color: #00cc00;
+        }
+
+        /* 解説セクション */
+        .explanation {
+            max-width: 900px;
+            margin: 40px auto;
+            padding: 20px;
+            border-top: 1px solid #eee;
+        }
+        .explanation h2 {
+            font-size: 20px;
+            font-weight: 500;
+            margin-bottom: 15px;
+            color: #333;
+        }
+        .explanation h3 {
+            font-size: 16px;
+            font-weight: 500;
+            margin: 20px 0 10px 0;
+            color: #444;
+        }
+        .explanation p {
+            font-size: 14px;
+            line-height: 1.7;
+            color: #555;
+            margin-bottom: 10px;
+        }
+        .explanation ul {
+            font-size: 14px;
+            line-height: 1.7;
+            color: #555;
+            margin-left: 20px;
+        }
+        .explanation li {
+            margin-bottom: 8px;
+        }
+        .formula-box {
+            background: #f5f5f5;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+            padding: 15px;
+            margin: 15px 0;
+            font-family: monospace;
+            font-size: 13px;
+            line-height: 2;
+        }
+        .gate-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+            gap: 15px;
+            margin: 15px 0;
+        }
+        .gate-explain {
+            background: #f9f9f9;
+            border: 1px solid #eee;
+            border-radius: 4px;
+            padding: 15px;
+        }
+        .gate-explain h4 {
+            font-size: 14px;
+            font-weight: 500;
+            margin-bottom: 8px;
+        }
+        .gate-explain.forget h4 { color: #cc6666; }
+        .gate-explain.input h4 { color: #66cc66; }
+        .gate-explain.candidate h4 { color: #6666cc; }
+        .gate-explain.output h4 { color: #cccc00; }
+    </style>
+</head>
+<body>
+    <h1>LSTM (Long Short-Term Memory) Animation</h1>
+
+    <div class="settings">
+        <div class="setting-group">
+            <label>Sequence Length:</label>
+            <select id="seqLength">
+                <option value="3">3</option>
+                <option value="4" selected>4</option>
+                <option value="5">5</option>
+                <option value="6">6</option>
+            </select>
+        </div>
+        <div class="setting-group">
+            <label>Input Dim:</label>
+            <select id="inputDim">
+                <option value="2">2</option>
+                <option value="3" selected>3</option>
+                <option value="4">4</option>
+            </select>
+        </div>
+        <div class="setting-group">
+            <label>Hidden Dim:</label>
+            <select id="hiddenDim">
+                <option value="2">2</option>
+                <option value="3">3</option>
+                <option value="4" selected>4</option>
+            </select>
+        </div>
+        <button onclick="initialize()">Apply</button>
+    </div>
+
+    <div class="controls">
+        <button id="playBtn" onclick="togglePlay()">Play</button>
+        <button id="stepBtn" onclick="step()">Step</button>
+        <button id="resetBtn" onclick="reset()">Reset</button>
+        <div class="speed-control">
+            <label>Speed:</label>
+            <input type="range" id="speed" min="100" max="1500" value="600">
+        </div>
+    </div>
+
+    <div class="phase-indicator" id="phaseIndicator">
+        Click "Play" or "Step" to start.
+    </div>
+
+    <div class="dims-info" id="dimsInfo">
+        seq_len = <span id="seqLenVal">4</span>,
+        input_dim = <span id="inputDimVal">3</span>,
+        hidden_dim = <span id="hiddenDimVal">4</span>,
+        concat_dim = hidden + input = <span id="concatDimVal">7</span>
+    </div>
+
+    <div class="sequence-display" id="sequenceDisplay"></div>
+
+    <!-- Parameters Section -->
+    <div class="params-section">
+        <div class="params-title" onclick="toggleParams()">
+            Parameters (Weight Matrices & Biases) ▼
+        </div>
+        <div class="params-content" id="paramsContent">
+            <!-- Wf -->
+            <div class="param-box">
+                <div class="param-label">W_f (hidden × concat)</div>
+                <div class="param-matrix" id="WfMatrix"></div>
+                <div class="param-label" style="margin-top:5px;">b_f</div>
+                <div class="bias-row" id="bfBias"></div>
+            </div>
+            <!-- Wi -->
+            <div class="param-box">
+                <div class="param-label">W_i (hidden × concat)</div>
+                <div class="param-matrix" id="WiMatrix"></div>
+                <div class="param-label" style="margin-top:5px;">b_i</div>
+                <div class="bias-row" id="biBias"></div>
+            </div>
+            <!-- Wc -->
+            <div class="param-box">
+                <div class="param-label">W_c (hidden × concat)</div>
+                <div class="param-matrix" id="WcMatrix"></div>
+                <div class="param-label" style="margin-top:5px;">b_c</div>
+                <div class="bias-row" id="bcBias"></div>
+            </div>
+            <!-- Wo -->
+            <div class="param-box">
+                <div class="param-label">W_o (hidden × concat)</div>
+                <div class="param-matrix" id="WoMatrix"></div>
+                <div class="param-label" style="margin-top:5px;">b_o</div>
+                <div class="bias-row" id="boBias"></div>
+            </div>
+        </div>
+    </div>
+
+    <div class="main-container">
+        <!-- Input/Previous State Section -->
+        <div class="io-section">
+            <div class="io-box">
+                <div class="io-title">Input x_t</div>
+                <div class="io-values" id="inputDisplay"></div>
+            </div>
+            <div class="io-box">
+                <div class="io-title">Previous h_{t-1}</div>
+                <div class="io-values" id="prevHDisplay"></div>
+            </div>
+            <div class="io-box">
+                <div class="io-title">Previous c_{t-1}</div>
+                <div class="io-values" id="prevCDisplay"></div>
+            </div>
+        </div>
+
+        <div class="arrow-down">↓</div>
+
+        <!-- LSTM Cell -->
+        <div class="lstm-cell">
+            <div class="cell-title">LSTM Cell</div>
+
+            <!-- Gates -->
+            <div class="gates-row">
+                <div class="gate-box forget-gate">
+                    <div class="gate-title">Forget Gate (f_t)</div>
+                    <div class="gate-formula">σ(W_f·[h,x] + b_f)</div>
+                    <div class="gate-value" id="forgetGate"></div>
+                </div>
+                <div class="gate-box input-gate">
+                    <div class="gate-title">Input Gate (i_t)</div>
+                    <div class="gate-formula">σ(W_i·[h,x] + b_i)</div>
+                    <div class="gate-value" id="inputGate"></div>
+                </div>
+                <div class="gate-box cell-candidate">
+                    <div class="gate-title">Cell Candidate (c̃_t)</div>
+                    <div class="gate-formula">tanh(W_c·[h,x] + b_c)</div>
+                    <div class="gate-value" id="cellCandidate"></div>
+                </div>
+                <div class="gate-box output-gate">
+                    <div class="gate-title">Output Gate (o_t)</div>
+                    <div class="gate-formula">σ(W_o·[h,x] + b_o)</div>
+                    <div class="gate-value" id="outputGate"></div>
+                </div>
+            </div>
+
+            <!-- States -->
+            <div class="states-row">
+                <div class="state-box cell-state">
+                    <div class="state-title">Cell State (c_t)</div>
+                    <div class="gate-formula">f_t ⊙ c_{t-1} + i_t ⊙ c̃_t</div>
+                    <div class="gate-value" id="cellState"></div>
+                </div>
+                <div class="state-box hidden-state">
+                    <div class="state-title">Hidden State (h_t)</div>
+                    <div class="gate-formula">o_t ⊙ tanh(c_t)</div>
+                    <div class="gate-value" id="hiddenState"></div>
+                </div>
+            </div>
+        </div>
+
+        <div class="arrow-down">↓</div>
+
+        <!-- Output -->
+        <div class="io-section">
+            <div class="io-box">
+                <div class="io-title">Output h_t</div>
+                <div class="io-values" id="outputDisplay"></div>
+            </div>
+        </div>
+    </div>
+
+    <div class="calculation" id="calculation">
+        LSTM processes sequences step by step, maintaining cell state and hidden state.
+    </div>
+
+    <!-- 解説セクション -->
+    <div class="explanation">
+        <h2>LSTM (Long Short-Term Memory) とは</h2>
+        <p>
+            LSTMは、長期的な依存関係を学習できるRNN（再帰型ニューラルネットワーク）の一種です。
+            通常のRNNが抱える勾配消失問題を、ゲート機構とセル状態によって解決しています。
+        </p>
+
+        <h3>4つのゲート</h3>
+        <div class="gate-grid">
+            <div class="gate-explain forget">
+                <h4>Forget Gate (忘却ゲート)</h4>
+                <p>過去の情報をどれだけ「忘れる」かを決定。0〜1の値で、0なら完全に忘れ、1なら完全に保持。</p>
+            </div>
+            <div class="gate-explain input">
+                <h4>Input Gate (入力ゲート)</h4>
+                <p>新しい情報をどれだけ「取り込む」かを決定。セル候補と掛け合わせて使用。</p>
+            </div>
+            <div class="gate-explain candidate">
+                <h4>Cell Candidate (セル候補)</h4>
+                <p>セル状態に追加する可能性のある新しい情報。tanh で -1〜1 の範囲。</p>
+            </div>
+            <div class="gate-explain output">
+                <h4>Output Gate (出力ゲート)</h4>
+                <p>セル状態のどの部分を出力（隠れ状態）として使うかを決定。</p>
+            </div>
+        </div>
+
+        <h3>数式</h3>
+        <div class="formula-box">
+            f_t = σ(W_f · [h_{t-1}, x_t] + b_f) &nbsp;&nbsp;← 忘却ゲート<br>
+            i_t = σ(W_i · [h_{t-1}, x_t] + b_i) &nbsp;&nbsp;← 入力ゲート<br>
+            c̃_t = tanh(W_c · [h_{t-1}, x_t] + b_c) &nbsp;&nbsp;← セル候補<br>
+            c_t = f_t ⊙ c_{t-1} + i_t ⊙ c̃_t &nbsp;&nbsp;← セル状態の更新<br>
+            o_t = σ(W_o · [h_{t-1}, x_t] + b_o) &nbsp;&nbsp;← 出力ゲート<br>
+            h_t = o_t ⊙ tanh(c_t) &nbsp;&nbsp;← 隠れ状態
+        </div>
+
+        <h3>なぜLSTMが有効か</h3>
+        <ul>
+            <li><strong>長期記憶</strong>: セル状態が「高速道路」のように情報を長距離伝播</li>
+            <li><strong>選択的記憶</strong>: ゲートにより、必要な情報だけを保持・更新</li>
+            <li><strong>勾配の安定</strong>: 加算による更新で、勾配消失を軽減</li>
+        </ul>
+    </div>
+
+    <script>
+        let seqLength = 4;
+        let inputDim = 3;
+        let hiddenDim = 4;
+
+        let inputSequence = [];
+        let Wf, Wi, Wc, Wo;
+        let bf, bi, bc, bo;
+
+        let currentStep = 0;
+        let subPhase = 0;
+        let h_prev = [];
+        let c_prev = [];
+        let h_t = [];
+        let c_t = [];
+        let f_t = [];
+        let i_t = [];
+        let c_candidate = [];
+        let o_t = [];
+
+        let isPlaying = false;
+        let intervalId = null;
+
+        function randomArray(size, scale = 1) {
+            return Array.from({ length: size }, () =>
+                Math.round((Math.random() * 2 - 1) * scale * 10) / 10
+            );
+        }
+
+        function zeros(size) {
+            return Array.from({ length: size }, () => 0);
+        }
+
+        function nullArray(size) {
+            return Array.from({ length: size }, () => null);
+        }
+
+        function sigmoid(x) {
+            return 1 / (1 + Math.exp(-x));
+        }
+
+        function tanh(x) {
+            return Math.tanh(x);
+        }
+
+        function randomMatrix(rows, cols, scale = 1) {
+            const m = [];
+            for (let i = 0; i < rows; i++) {
+                m[i] = [];
+                for (let j = 0; j < cols; j++) {
+                    m[i][j] = Math.round((Math.random() * 2 - 1) * scale * 10) / 10;
+                }
+            }
+            return m;
+        }
+
+        function computeGate(W, b, h, x, activation) {
+            const concat = [...h, ...x];
+            const result = [];
+            for (let i = 0; i < hiddenDim; i++) {
+                let sum = b[i];
+                for (let j = 0; j < concat.length; j++) {
+                    sum += W[i][j] * concat[j];
+                }
+                result[i] = Math.round(activation(sum) * 100) / 100;
+            }
+            return result;
+        }
+
+        function elementWise(a, b, op) {
+            return a.map((v, i) => {
+                if (op === 'mul') return Math.round(v * b[i] * 100) / 100;
+                if (op === 'add') return Math.round((v + b[i]) * 100) / 100;
+            });
+        }
+
+        let paramsVisible = true;
+
+        function toggleParams() {
+            paramsVisible = !paramsVisible;
+            document.getElementById('paramsContent').style.display = paramsVisible ? 'flex' : 'none';
+        }
+
+        function renderParamMatrix(containerId, matrix, cellClass) {
+            const container = document.getElementById(containerId);
+            const rows = matrix.length;
+            const cols = matrix[0].length;
+            container.style.gridTemplateColumns = `repeat(${cols}, 32px)`;
+            container.innerHTML = '';
+            for (let i = 0; i < rows; i++) {
+                for (let j = 0; j < cols; j++) {
+                    const cell = document.createElement('div');
+                    cell.className = `param-cell ${cellClass}`;
+                    cell.textContent = matrix[i][j];
+                    container.appendChild(cell);
+                }
+            }
+        }
+
+        function renderBiasArray(containerId, arr, cellClass) {
+            const container = document.getElementById(containerId);
+            container.innerHTML = '';
+            arr.forEach(v => {
+                const cell = document.createElement('div');
+                cell.className = `param-cell ${cellClass}`;
+                cell.textContent = v;
+                container.appendChild(cell);
+            });
+        }
+
+        function renderAllParams() {
+            renderParamMatrix('WfMatrix', Wf, 'wf');
+            renderParamMatrix('WiMatrix', Wi, 'wi');
+            renderParamMatrix('WcMatrix', Wc, 'wc');
+            renderParamMatrix('WoMatrix', Wo, 'wo');
+            renderBiasArray('bfBias', bf, 'bias');
+            renderBiasArray('biBias', bi, 'bias');
+            renderBiasArray('bcBias', bc, 'bias');
+            renderBiasArray('boBias', bo, 'bias');
+        }
+
+        function initialize() {
+            seqLength = parseInt(document.getElementById('seqLength').value);
+            inputDim = parseInt(document.getElementById('inputDim').value);
+            hiddenDim = parseInt(document.getElementById('hiddenDim').value);
+
+            const concatDim = hiddenDim + inputDim;
+
+            // Update dimension info
+            document.getElementById('seqLenVal').textContent = seqLength;
+            document.getElementById('inputDimVal').textContent = inputDim;
+            document.getElementById('hiddenDimVal').textContent = hiddenDim;
+            document.getElementById('concatDimVal').textContent = concatDim;
+
+            // Generate input sequence
+            inputSequence = [];
+            for (let t = 0; t < seqLength; t++) {
+                inputSequence.push(randomArray(inputDim, 1));
+            }
+
+            // Initialize weights
+            Wf = randomMatrix(hiddenDim, concatDim, 0.5);
+            Wi = randomMatrix(hiddenDim, concatDim, 0.5);
+            Wc = randomMatrix(hiddenDim, concatDim, 0.5);
+            Wo = randomMatrix(hiddenDim, concatDim, 0.5);
+
+            bf = randomArray(hiddenDim, 0.1);
+            bi = randomArray(hiddenDim, 0.1);
+            bc = randomArray(hiddenDim, 0.1);
+            bo = randomArray(hiddenDim, 0.1);
+
+            // Render parameters
+            renderAllParams();
+
+            reset();
+        }
+
+        function renderArray(container, arr, cellClass = '') {
+            container.innerHTML = '';
+            arr.forEach((v, i) => {
+                const cell = document.createElement('div');
+                cell.className = `value-cell ${cellClass}`;
+                cell.textContent = v !== null ? v : '?';
+                container.appendChild(cell);
+            });
+        }
+
+        function renderSequence() {
+            const container = document.getElementById('sequenceDisplay');
+            container.innerHTML = '';
+            for (let t = 0; t < seqLength; t++) {
+                const step = document.createElement('div');
+                step.className = 'seq-step';
+                if (t < currentStep) step.classList.add('done');
+                if (t === currentStep) step.classList.add('current');
+                step.textContent = `t=${t}`;
+                container.appendChild(step);
+            }
+        }
+
+        function renderAll() {
+            renderSequence();
+
+            const x_t = currentStep < seqLength ? inputSequence[currentStep] : zeros(inputDim);
+            renderArray(document.getElementById('inputDisplay'), x_t, 'input-cell active');
+            renderArray(document.getElementById('prevHDisplay'), h_prev, 'prev-cell');
+            renderArray(document.getElementById('prevCDisplay'), c_prev, 'prev-cell');
+
+            renderArray(document.getElementById('forgetGate'), f_t);
+            renderArray(document.getElementById('inputGate'), i_t);
+            renderArray(document.getElementById('cellCandidate'), c_candidate);
+            renderArray(document.getElementById('outputGate'), o_t);
+            renderArray(document.getElementById('cellState'), c_t);
+            renderArray(document.getElementById('hiddenState'), h_t);
+            renderArray(document.getElementById('outputDisplay'), h_t);
+        }
+
+        function clearHighlights() {
+            document.querySelectorAll('.value-cell').forEach(cell => {
+                cell.classList.remove('highlight', 'computed');
+            });
+        }
+
+        function highlightGate(gateId) {
+            document.querySelectorAll(`#${gateId} .value-cell`).forEach(cell => {
+                cell.classList.add('highlight', 'computed');
+            });
+        }
+
+        function step() {
+            if (currentStep >= seqLength) {
+                document.getElementById('phaseIndicator').textContent = 'Sequence Complete!';
+                document.getElementById('calculation').innerHTML = '<div class="result">LSTM processing complete!</div>';
+                stopPlay();
+                return false;
+            }
+
+            clearHighlights();
+            const x_t = inputSequence[currentStep];
+
+            // SubPhase 0: Forget Gate
+            if (subPhase === 0) {
+                document.getElementById('phaseIndicator').textContent =
+                    `Step ${currentStep + 1}/${seqLength} - Computing Forget Gate`;
+
+                f_t = computeGate(Wf, bf, h_prev, x_t, sigmoid);
+                renderArray(document.getElementById('forgetGate'), f_t);
+                highlightGate('forgetGate');
+
+                document.getElementById('calculation').innerHTML = `
+                    <div class="step-name">Forget Gate: f_t = σ(W_f · [h_{t-1}, x_t] + b_f)</div>
+                    <div class="result">f_t = [${f_t.join(', ')}]</div>
+                `;
+
+                subPhase = 1;
+                return true;
+            }
+
+            // SubPhase 1: Input Gate
+            if (subPhase === 1) {
+                document.getElementById('phaseIndicator').textContent =
+                    `Step ${currentStep + 1}/${seqLength} - Computing Input Gate`;
+
+                i_t = computeGate(Wi, bi, h_prev, x_t, sigmoid);
+                renderArray(document.getElementById('inputGate'), i_t);
+                highlightGate('inputGate');
+
+                document.getElementById('calculation').innerHTML = `
+                    <div class="step-name">Input Gate: i_t = σ(W_i · [h_{t-1}, x_t] + b_i)</div>
+                    <div class="result">i_t = [${i_t.join(', ')}]</div>
+                `;
+
+                subPhase = 2;
+                return true;
+            }
+
+            // SubPhase 2: Cell Candidate
+            if (subPhase === 2) {
+                document.getElementById('phaseIndicator').textContent =
+                    `Step ${currentStep + 1}/${seqLength} - Computing Cell Candidate`;
+
+                c_candidate = computeGate(Wc, bc, h_prev, x_t, tanh);
+                renderArray(document.getElementById('cellCandidate'), c_candidate);
+                highlightGate('cellCandidate');
+
+                document.getElementById('calculation').innerHTML = `
+                    <div class="step-name">Cell Candidate: c̃_t = tanh(W_c · [h_{t-1}, x_t] + b_c)</div>
+                    <div class="result">c̃_t = [${c_candidate.join(', ')}]</div>
+                `;
+
+                subPhase = 3;
+                return true;
+            }
+
+            // SubPhase 3: Output Gate
+            if (subPhase === 3) {
+                document.getElementById('phaseIndicator').textContent =
+                    `Step ${currentStep + 1}/${seqLength} - Computing Output Gate`;
+
+                o_t = computeGate(Wo, bo, h_prev, x_t, sigmoid);
+                renderArray(document.getElementById('outputGate'), o_t);
+                highlightGate('outputGate');
+
+                document.getElementById('calculation').innerHTML = `
+                    <div class="step-name">Output Gate: o_t = σ(W_o · [h_{t-1}, x_t] + b_o)</div>
+                    <div class="result">o_t = [${o_t.join(', ')}]</div>
+                `;
+
+                subPhase = 4;
+                return true;
+            }
+
+            // SubPhase 4: Cell State
+            if (subPhase === 4) {
+                document.getElementById('phaseIndicator').textContent =
+                    `Step ${currentStep + 1}/${seqLength} - Updating Cell State`;
+
+                const forget_part = elementWise(f_t, c_prev, 'mul');
+                const input_part = elementWise(i_t, c_candidate, 'mul');
+                c_t = elementWise(forget_part, input_part, 'add');
+
+                renderArray(document.getElementById('cellState'), c_t);
+                highlightGate('cellState');
+
+                document.getElementById('calculation').innerHTML = `
+                    <div class="step-name">Cell State: c_t = f_t ⊙ c_{t-1} + i_t ⊙ c̃_t</div>
+                    <div>= [${forget_part.join(', ')}] + [${input_part.join(', ')}]</div>
+                    <div class="result">c_t = [${c_t.join(', ')}]</div>
+                `;
+
+                subPhase = 5;
+                return true;
+            }
+
+            // SubPhase 5: Hidden State
+            if (subPhase === 5) {
+                document.getElementById('phaseIndicator').textContent =
+                    `Step ${currentStep + 1}/${seqLength} - Computing Hidden State`;
+
+                const tanh_c = c_t.map(v => Math.round(tanh(v) * 100) / 100);
+                h_t = elementWise(o_t, tanh_c, 'mul');
+
+                renderArray(document.getElementById('hiddenState'), h_t);
+                renderArray(document.getElementById('outputDisplay'), h_t);
+                highlightGate('hiddenState');
+
+                document.getElementById('calculation').innerHTML = `
+                    <div class="step-name">Hidden State: h_t = o_t ⊙ tanh(c_t)</div>
+                    <div>= [${o_t.join(', ')}] ⊙ [${tanh_c.join(', ')}]</div>
+                    <div class="result">h_t = [${h_t.join(', ')}]</div>
+                `;
+
+                // Prepare for next step
+                h_prev = [...h_t];
+                c_prev = [...c_t];
+                currentStep++;
+                subPhase = 0;
+
+                // Reset gate displays for next step
+                if (currentStep < seqLength) {
+                    setTimeout(() => {
+                        f_t = nullArray(hiddenDim);
+                        i_t = nullArray(hiddenDim);
+                        c_candidate = nullArray(hiddenDim);
+                        o_t = nullArray(hiddenDim);
+                        c_t = nullArray(hiddenDim);
+                        h_t = nullArray(hiddenDim);
+                        renderAll();
+                    }, 300);
+                }
+
+                return currentStep < seqLength;
+            }
+
+            return false;
+        }
+
+        function togglePlay() {
+            if (isPlaying) {
+                stopPlay();
+            } else {
+                startPlay();
+            }
+        }
+
+        function startPlay() {
+            isPlaying = true;
+            document.getElementById('playBtn').textContent = 'Pause';
+            const speed = 1600 - parseInt(document.getElementById('speed').value);
+            intervalId = setInterval(() => {
+                if (!step()) {
+                    stopPlay();
+                }
+            }, speed);
+        }
+
+        function stopPlay() {
+            isPlaying = false;
+            document.getElementById('playBtn').textContent = 'Play';
+            if (intervalId) {
+                clearInterval(intervalId);
+                intervalId = null;
+            }
+        }
+
+        function reset() {
+            stopPlay();
+            currentStep = 0;
+            subPhase = 0;
+
+            h_prev = zeros(hiddenDim);
+            c_prev = zeros(hiddenDim);
+            h_t = nullArray(hiddenDim);
+            c_t = nullArray(hiddenDim);
+            f_t = nullArray(hiddenDim);
+            i_t = nullArray(hiddenDim);
+            c_candidate = nullArray(hiddenDim);
+            o_t = nullArray(hiddenDim);
+
+            renderAll();
+            clearHighlights();
+
+            document.getElementById('phaseIndicator').textContent = 'Click "Play" or "Step" to start.';
+            document.getElementById('calculation').innerHTML =
+                'LSTM processes sequences step by step, maintaining cell state and hidden state.';
+        }
+
+        window.onload = initialize;
+    </script>
+</body>
+</html>
