@@ -1,0 +1,456 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Reduce Operations Animation</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+            background: #fff;
+            padding: 20px;
+            color: #333;
+        }
+        h1 {
+            text-align: center;
+            margin-bottom: 20px;
+            font-weight: 500;
+        }
+        .controls {
+            display: flex;
+            justify-content: center;
+            gap: 10px;
+            margin-bottom: 20px;
+            flex-wrap: wrap;
+            align-items: center;
+        }
+        .setting-group {
+            display: flex;
+            align-items: center;
+            gap: 5px;
+            font-size: 14px;
+        }
+        .setting-group label {
+            color: #666;
+        }
+        .setting-group select {
+            padding: 6px 12px;
+            border: 1px solid #ccc;
+            border-radius: 4px;
+            background: #fff;
+            font-size: 14px;
+        }
+        button {
+            padding: 8px 16px;
+            font-size: 14px;
+            border: 1px solid #ccc;
+            border-radius: 4px;
+            cursor: pointer;
+            background: #fff;
+        }
+        button:hover {
+            background: #f0f0f0;
+        }
+        .container {
+            display: flex;
+            flex-wrap: wrap;
+            justify-content: center;
+            gap: 40px;
+            margin-bottom: 20px;
+            align-items: flex-start;
+        }
+        .matrix-container {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+        }
+        .matrix-label {
+            font-size: 14px;
+            margin-bottom: 8px;
+            color: #666;
+        }
+        .matrix {
+            display: grid;
+            gap: 1px;
+            background: #ddd;
+            padding: 1px;
+        }
+        .cell {
+            width: 45px;
+            height: 36px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 11px;
+            background: #f5f5f5;
+        }
+        .input-cell.highlight {
+            background: #ffcccc;
+        }
+        .input-cell.processed {
+            background: #ffe5cc;
+        }
+        .output-cell.computed {
+            background: #ccffcc;
+        }
+        .output-cell.current {
+            background: #ffffcc;
+        }
+        .arrow-symbol {
+            font-size: 24px;
+            color: #666;
+            display: flex;
+            align-items: center;
+            padding-top: 30px;
+        }
+        .calculation {
+            text-align: center;
+            padding: 15px;
+            background: #f9f9f9;
+            border: 1px solid #eee;
+            margin: 20px auto;
+            max-width: 700px;
+            font-family: monospace;
+            font-size: 13px;
+            line-height: 1.6;
+        }
+        .formula {
+            text-align: center;
+            padding: 10px;
+            background: #f0f8ff;
+            border: 1px solid #ddd;
+            margin: 10px auto;
+            max-width: 600px;
+            font-family: monospace;
+            font-size: 14px;
+        }
+        .speed-control {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            font-size: 14px;
+            color: #666;
+        }
+        .speed-control input {
+            width: 80px;
+        }
+        .shape-info {
+            font-size: 11px;
+            color: #888;
+            margin-top: 4px;
+        }
+    </style>
+</head>
+<body>
+    <h1>Reduce Operations Animation</h1>
+
+    <div class="controls">
+        <div class="setting-group">
+            <label>Operation:</label>
+            <select id="operation" onchange="changeOperation()">
+                <option value="sum">ReduceSum</option>
+                <option value="mean">ReduceMean</option>
+                <option value="max">ReduceMax</option>
+                <option value="min">ReduceMin</option>
+                <option value="prod">ReduceProd</option>
+                <option value="l1">ReduceL1</option>
+                <option value="l2">ReduceL2</option>
+                <option value="sumsquare">ReduceSumSquare</option>
+                <option value="logsumexp">ReduceLogSumExp</option>
+                <option value="logsum">ReduceLogSum</option>
+            </select>
+        </div>
+        <div class="setting-group">
+            <label>Axis:</label>
+            <select id="axis" onchange="changeOperation()">
+                <option value="0">0 (rows)</option>
+                <option value="1" selected>1 (cols)</option>
+                <option value="all">All (flatten)</option>
+            </select>
+        </div>
+        <button id="playBtn" onclick="togglePlay()">Play</button>
+        <button onclick="step()">Step</button>
+        <button onclick="reset()">Reset</button>
+        <div class="speed-control">
+            <label>Speed:</label>
+            <input type="range" id="speed" min="100" max="1500" value="500">
+        </div>
+    </div>
+
+    <div class="formula" id="formula">ReduceSum along axis 1</div>
+
+    <div class="container">
+        <div class="matrix-container">
+            <div class="matrix-label">Input</div>
+            <div id="inputMatrix" class="matrix"></div>
+            <div class="shape-info" id="inputShape">(4, 5)</div>
+        </div>
+        <div class="arrow-symbol">→</div>
+        <div class="matrix-container">
+            <div class="matrix-label">Output</div>
+            <div id="outputMatrix" class="matrix"></div>
+            <div class="shape-info" id="outputShape">(4, 1)</div>
+        </div>
+    </div>
+
+    <div class="calculation" id="calculation">
+        Click "Play" or "Step" to start.
+    </div>
+
+    <script>
+        const operations = {
+            sum: {
+                name: 'ReduceSum',
+                fn: arr => arr.reduce((a, b) => a + b, 0),
+                formula: vals => vals.join(' + ')
+            },
+            mean: {
+                name: 'ReduceMean',
+                fn: arr => arr.reduce((a, b) => a + b, 0) / arr.length,
+                formula: vals => `(${vals.join(' + ')}) / ${vals.length}`
+            },
+            max: {
+                name: 'ReduceMax',
+                fn: arr => Math.max(...arr),
+                formula: vals => `max(${vals.join(', ')})`
+            },
+            min: {
+                name: 'ReduceMin',
+                fn: arr => Math.min(...arr),
+                formula: vals => `min(${vals.join(', ')})`
+            },
+            prod: {
+                name: 'ReduceProd',
+                fn: arr => arr.reduce((a, b) => a * b, 1),
+                formula: vals => vals.join(' × ')
+            },
+            l1: {
+                name: 'ReduceL1',
+                fn: arr => arr.reduce((a, b) => a + Math.abs(b), 0),
+                formula: vals => vals.map(v => `|${v}|`).join(' + ')
+            },
+            l2: {
+                name: 'ReduceL2',
+                fn: arr => Math.sqrt(arr.reduce((a, b) => a + b * b, 0)),
+                formula: vals => `√(${vals.map(v => `${v}²`).join(' + ')})`
+            },
+            sumsquare: {
+                name: 'ReduceSumSquare',
+                fn: arr => arr.reduce((a, b) => a + b * b, 0),
+                formula: vals => vals.map(v => `${v}²`).join(' + ')
+            },
+            logsumexp: {
+                name: 'ReduceLogSumExp',
+                fn: arr => {
+                    const max = Math.max(...arr);
+                    return max + Math.log(arr.reduce((a, b) => a + Math.exp(b - max), 0));
+                },
+                formula: vals => `log(${vals.map(v => `e^${v}`).join(' + ')})`
+            },
+            logsum: {
+                name: 'ReduceLogSum',
+                fn: arr => Math.log(arr.reduce((a, b) => a + b, 0)),
+                formula: vals => `log(${vals.join(' + ')})`
+            }
+        };
+
+        let inputData = [];
+        let outputData = [];
+        const rows = 4;
+        const cols = 5;
+        let currentOp = 'sum';
+        let axis = 1;
+        let currentIdx = 0;
+        let isPlaying = false;
+        let intervalId = null;
+        let totalSteps = 0;
+
+        function generateInput() {
+            inputData = [];
+            for (let i = 0; i < rows; i++) {
+                inputData[i] = [];
+                for (let j = 0; j < cols; j++) {
+                    inputData[i][j] = Math.floor(Math.random() * 9) + 1;
+                }
+            }
+        }
+
+        function changeOperation() {
+            currentOp = document.getElementById('operation').value;
+            const axisVal = document.getElementById('axis').value;
+            axis = axisVal === 'all' ? 'all' : parseInt(axisVal);
+
+            const op = operations[currentOp];
+            let axisText = axis === 'all' ? 'all axes' : `axis ${axis}`;
+            document.getElementById('formula').textContent = `${op.name} along ${axisText}`;
+
+            reset();
+        }
+
+        function getOutputShape() {
+            if (axis === 'all') return [1, 1];
+            if (axis === 0) return [1, cols];
+            return [rows, 1];
+        }
+
+        function renderMatrices() {
+            // Input
+            const inputMatrix = document.getElementById('inputMatrix');
+            inputMatrix.style.gridTemplateColumns = `repeat(${cols}, 45px)`;
+            inputMatrix.innerHTML = '';
+            for (let i = 0; i < rows; i++) {
+                for (let j = 0; j < cols; j++) {
+                    const cell = document.createElement('div');
+                    cell.className = 'cell input-cell';
+                    cell.id = `input-${i}-${j}`;
+                    cell.textContent = inputData[i][j];
+                    inputMatrix.appendChild(cell);
+                }
+            }
+            document.getElementById('inputShape').textContent = `(${rows}, ${cols})`;
+
+            // Output
+            const [outRows, outCols] = getOutputShape();
+            const outputMatrix = document.getElementById('outputMatrix');
+            outputMatrix.style.gridTemplateColumns = `repeat(${outCols}, 45px)`;
+            outputMatrix.innerHTML = '';
+
+            outputData = [];
+            for (let i = 0; i < outRows; i++) {
+                outputData[i] = [];
+                for (let j = 0; j < outCols; j++) {
+                    outputData[i][j] = null;
+                    const cell = document.createElement('div');
+                    cell.className = 'cell output-cell';
+                    cell.id = `output-${i}-${j}`;
+                    cell.textContent = '?';
+                    outputMatrix.appendChild(cell);
+                }
+            }
+            document.getElementById('outputShape').textContent = `(${outRows}, ${outCols})`;
+
+            totalSteps = outRows * outCols;
+        }
+
+        function getValuesForStep(stepIdx) {
+            const [outRows, outCols] = getOutputShape();
+            const outI = Math.floor(stepIdx / outCols);
+            const outJ = stepIdx % outCols;
+
+            let values = [];
+            let positions = [];
+
+            if (axis === 'all') {
+                for (let i = 0; i < rows; i++) {
+                    for (let j = 0; j < cols; j++) {
+                        values.push(inputData[i][j]);
+                        positions.push({ i, j });
+                    }
+                }
+            } else if (axis === 0) {
+                for (let i = 0; i < rows; i++) {
+                    values.push(inputData[i][outJ]);
+                    positions.push({ i, j: outJ });
+                }
+            } else {
+                for (let j = 0; j < cols; j++) {
+                    values.push(inputData[outI][j]);
+                    positions.push({ i: outI, j });
+                }
+            }
+
+            return { values, positions, outI, outJ };
+        }
+
+        function step() {
+            if (currentIdx >= totalSteps) {
+                document.getElementById('calculation').innerHTML = '<div style="font-weight:bold">Complete</div>';
+                stopPlay();
+                return false;
+            }
+
+            // Clear highlights
+            document.querySelectorAll('.input-cell').forEach(c => {
+                c.classList.remove('highlight', 'processed');
+            });
+            document.querySelectorAll('.output-cell').forEach(c => c.classList.remove('current'));
+
+            const { values, positions, outI, outJ } = getValuesForStep(currentIdx);
+            const op = operations[currentOp];
+
+            // Highlight input cells
+            positions.forEach(pos => {
+                const cell = document.getElementById(`input-${pos.i}-${pos.j}`);
+                if (cell) cell.classList.add('highlight');
+            });
+
+            // Compute
+            const result = op.fn(values);
+            const resultStr = Number.isInteger(result) ? result : result.toFixed(3);
+
+            // Update output
+            const outputCell = document.getElementById(`output-${outI}-${outJ}`);
+            outputCell.classList.add('current');
+            outputCell.textContent = resultStr;
+            outputCell.classList.add('computed');
+
+            outputData[outI][outJ] = result;
+
+            // Update calculation
+            document.getElementById('calculation').innerHTML = `
+                <div>Output[${outI}][${outJ}]</div>
+                <div>${op.formula(values)}</div>
+                <div style="font-weight:bold">= ${resultStr}</div>
+            `;
+
+            currentIdx++;
+            return currentIdx < totalSteps;
+        }
+
+        function togglePlay() {
+            if (isPlaying) {
+                stopPlay();
+            } else {
+                startPlay();
+            }
+        }
+
+        function startPlay() {
+            isPlaying = true;
+            document.getElementById('playBtn').textContent = 'Pause';
+            const speed = 1600 - parseInt(document.getElementById('speed').value);
+            intervalId = setInterval(() => {
+                if (!step()) {
+                    stopPlay();
+                }
+            }, speed);
+        }
+
+        function stopPlay() {
+            isPlaying = false;
+            document.getElementById('playBtn').textContent = 'Play';
+            if (intervalId) {
+                clearInterval(intervalId);
+                intervalId = null;
+            }
+        }
+
+        function reset() {
+            stopPlay();
+            currentIdx = 0;
+            generateInput();
+            renderMatrices();
+            document.getElementById('calculation').innerHTML = 'Click "Play" or "Step" to start.';
+        }
+
+        window.onload = function() {
+            changeOperation();
+        };
+    </script>
+</body>
+</html>

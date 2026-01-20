@@ -1,0 +1,375 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>LayerNormalization Animation</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+            background: #fff;
+            padding: 20px;
+            color: #333;
+        }
+        h1 {
+            text-align: center;
+            margin-bottom: 20px;
+            font-weight: 500;
+        }
+        .container {
+            display: flex;
+            flex-wrap: wrap;
+            justify-content: center;
+            gap: 40px;
+            margin-bottom: 20px;
+            align-items: flex-start;
+        }
+        .matrix-container {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+        }
+        .matrix-label {
+            font-size: 14px;
+            margin-bottom: 8px;
+            color: #666;
+        }
+        .matrix {
+            display: grid;
+            gap: 1px;
+            background: #ddd;
+            padding: 1px;
+        }
+        .cell {
+            width: 55px;
+            height: 36px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 10px;
+            background: #f5f5f5;
+        }
+        .input-cell.highlight {
+            background: #ffcccc;
+        }
+        .input-cell.row-highlight {
+            background: #ffe5cc;
+        }
+        .output-cell.current {
+            background: #ffffcc;
+        }
+        .output-cell.computed {
+            background: #ccffcc;
+        }
+        .stats-container {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            padding-top: 30px;
+        }
+        .stats-box {
+            padding: 10px 15px;
+            background: #f0f8ff;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+            font-family: monospace;
+            font-size: 12px;
+            margin-bottom: 10px;
+        }
+        .arrow-symbol {
+            font-size: 24px;
+            color: #666;
+            display: flex;
+            align-items: center;
+            padding-top: 30px;
+        }
+        .controls {
+            display: flex;
+            justify-content: center;
+            gap: 10px;
+            margin-bottom: 20px;
+            flex-wrap: wrap;
+            align-items: center;
+        }
+        button {
+            padding: 8px 16px;
+            font-size: 14px;
+            border: 1px solid #ccc;
+            border-radius: 4px;
+            cursor: pointer;
+            background: #fff;
+        }
+        button:hover {
+            background: #f0f0f0;
+        }
+        .speed-control {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            font-size: 14px;
+            color: #666;
+        }
+        .speed-control input {
+            width: 80px;
+        }
+        .calculation {
+            text-align: center;
+            padding: 15px;
+            background: #f9f9f9;
+            border: 1px solid #eee;
+            margin: 20px auto;
+            max-width: 800px;
+            font-family: monospace;
+            font-size: 12px;
+            line-height: 1.6;
+        }
+        .formula {
+            text-align: center;
+            padding: 10px;
+            background: #f0f8ff;
+            border: 1px solid #ddd;
+            margin: 10px auto;
+            max-width: 600px;
+            font-family: monospace;
+            font-size: 14px;
+        }
+    </style>
+</head>
+<body>
+    <h1>LayerNormalization Animation</h1>
+
+    <div class="formula">
+        y = (x - μ) / √(σ² + ε) × γ + β
+    </div>
+
+    <div class="controls">
+        <button id="playBtn" onclick="togglePlay()">Play</button>
+        <button onclick="step()">Step</button>
+        <button onclick="reset()">Reset</button>
+        <div class="speed-control">
+            <label>Speed:</label>
+            <input type="range" id="speed" min="100" max="1500" value="600">
+        </div>
+    </div>
+
+    <div class="container">
+        <div class="matrix-container">
+            <div class="matrix-label">Input (batch × features)</div>
+            <div id="inputMatrix" class="matrix"></div>
+        </div>
+        <div class="stats-container">
+            <div class="stats-box" id="statsBox">
+                μ = ?<br>σ² = ?
+            </div>
+            <div style="font-size:12px;color:#666">γ=1, β=0, ε=1e-5</div>
+        </div>
+        <div class="arrow-symbol">→</div>
+        <div class="matrix-container">
+            <div class="matrix-label">Output (normalized)</div>
+            <div id="outputMatrix" class="matrix"></div>
+        </div>
+    </div>
+
+    <div class="calculation" id="calculation">
+        Click "Play" or "Step" to start.
+    </div>
+
+    <script>
+        let inputData = [];
+        let outputData = [];
+        const batchSize = 3;
+        const features = 5;
+        let currentRow = 0;
+        let currentCol = 0;
+        let phase = 'stats'; // 'stats' or 'normalize'
+        let currentMean = 0;
+        let currentVar = 0;
+        let isPlaying = false;
+        let intervalId = null;
+        const epsilon = 1e-5;
+        const gamma = 1;
+        const beta = 0;
+
+        function generateInput() {
+            inputData = [];
+            for (let i = 0; i < batchSize; i++) {
+                inputData[i] = [];
+                for (let j = 0; j < features; j++) {
+                    inputData[i][j] = (Math.random() * 10 - 2).toFixed(2);
+                }
+            }
+        }
+
+        function renderMatrices() {
+            // Input
+            const inputMatrix = document.getElementById('inputMatrix');
+            inputMatrix.style.gridTemplateColumns = `repeat(${features}, 55px)`;
+            inputMatrix.innerHTML = '';
+            for (let i = 0; i < batchSize; i++) {
+                for (let j = 0; j < features; j++) {
+                    const cell = document.createElement('div');
+                    cell.className = 'cell input-cell';
+                    cell.id = `input-${i}-${j}`;
+                    cell.textContent = inputData[i][j];
+                    inputMatrix.appendChild(cell);
+                }
+            }
+
+            // Output
+            const outputMatrix = document.getElementById('outputMatrix');
+            outputMatrix.style.gridTemplateColumns = `repeat(${features}, 55px)`;
+            outputMatrix.innerHTML = '';
+            outputData = [];
+            for (let i = 0; i < batchSize; i++) {
+                outputData[i] = [];
+                for (let j = 0; j < features; j++) {
+                    outputData[i][j] = null;
+                    const cell = document.createElement('div');
+                    cell.className = 'cell output-cell';
+                    cell.id = `output-${i}-${j}`;
+                    cell.textContent = '?';
+                    outputMatrix.appendChild(cell);
+                }
+            }
+        }
+
+        function computeStats(row) {
+            const vals = inputData[row].map(Number);
+            const mean = vals.reduce((a, b) => a + b, 0) / vals.length;
+            const variance = vals.reduce((a, b) => a + (b - mean) ** 2, 0) / vals.length;
+            return { mean, variance };
+        }
+
+        function normalize(x, mean, variance) {
+            return gamma * (x - mean) / Math.sqrt(variance + epsilon) + beta;
+        }
+
+        function highlightRow(row) {
+            document.querySelectorAll('.input-cell').forEach(c => {
+                c.classList.remove('highlight', 'row-highlight');
+            });
+            for (let j = 0; j < features; j++) {
+                const cell = document.getElementById(`input-${row}-${j}`);
+                if (cell) cell.classList.add('row-highlight');
+            }
+        }
+
+        function step() {
+            if (currentRow >= batchSize) {
+                document.getElementById('calculation').innerHTML = '<div style="font-weight:bold">Complete</div>';
+                stopPlay();
+                return false;
+            }
+
+            document.querySelectorAll('.output-cell').forEach(c => c.classList.remove('current'));
+
+            if (phase === 'stats') {
+                // Compute statistics for current row
+                highlightRow(currentRow);
+                const { mean, variance } = computeStats(currentRow);
+                currentMean = mean;
+                currentVar = variance;
+
+                document.getElementById('statsBox').innerHTML = `
+                    Row ${currentRow}:<br>
+                    μ = ${mean.toFixed(4)}<br>
+                    σ² = ${variance.toFixed(4)}
+                `;
+
+                const vals = inputData[currentRow].map(Number);
+                document.getElementById('calculation').innerHTML = `
+                    <div>Computing statistics for row ${currentRow}</div>
+                    <div>Values: [${vals.map(v => v.toFixed(2)).join(', ')}]</div>
+                    <div>μ = (${vals.map(v => v.toFixed(2)).join(' + ')}) / ${features} = ${mean.toFixed(4)}</div>
+                    <div>σ² = Σ(x - μ)² / n = ${variance.toFixed(4)}</div>
+                `;
+
+                phase = 'normalize';
+                currentCol = 0;
+            } else {
+                // Normalize current element
+                const inputCell = document.getElementById(`input-${currentRow}-${currentCol}`);
+                inputCell.classList.add('highlight');
+
+                const x = Number(inputData[currentRow][currentCol]);
+                const normalized = normalize(x, currentMean, currentVar);
+                outputData[currentRow][currentCol] = normalized;
+
+                const outputCell = document.getElementById(`output-${currentRow}-${currentCol}`);
+                outputCell.textContent = normalized.toFixed(3);
+                outputCell.classList.add('current', 'computed');
+
+                document.getElementById('calculation').innerHTML = `
+                    <div>Normalizing Input[${currentRow}][${currentCol}]</div>
+                    <div>x = ${x}, μ = ${currentMean.toFixed(4)}, σ² = ${currentVar.toFixed(4)}</div>
+                    <div>y = (${x} - ${currentMean.toFixed(4)}) / √(${currentVar.toFixed(4)} + ${epsilon})</div>
+                    <div style="font-weight:bold">= ${normalized.toFixed(4)}</div>
+                `;
+
+                currentCol++;
+                if (currentCol >= features) {
+                    currentCol = 0;
+                    currentRow++;
+                    phase = 'stats';
+                }
+            }
+
+            return currentRow < batchSize || phase === 'normalize';
+        }
+
+        function togglePlay() {
+            if (isPlaying) {
+                stopPlay();
+            } else {
+                startPlay();
+            }
+        }
+
+        function startPlay() {
+            isPlaying = true;
+            document.getElementById('playBtn').textContent = 'Pause';
+            const speed = 1600 - parseInt(document.getElementById('speed').value);
+            intervalId = setInterval(() => {
+                if (!step()) {
+                    stopPlay();
+                }
+            }, speed);
+        }
+
+        function stopPlay() {
+            isPlaying = false;
+            document.getElementById('playBtn').textContent = 'Play';
+            if (intervalId) {
+                clearInterval(intervalId);
+                intervalId = null;
+            }
+        }
+
+        function reset() {
+            stopPlay();
+            currentRow = 0;
+            currentCol = 0;
+            phase = 'stats';
+            currentMean = 0;
+            currentVar = 0;
+
+            generateInput();
+            renderMatrices();
+
+            document.querySelectorAll('.input-cell').forEach(c => {
+                c.classList.remove('highlight', 'row-highlight');
+            });
+
+            document.getElementById('statsBox').innerHTML = 'μ = ?<br>σ² = ?';
+            document.getElementById('calculation').innerHTML = 'Click "Play" or "Step" to start.';
+        }
+
+        window.onload = reset;
+    </script>
+</body>
+</html>

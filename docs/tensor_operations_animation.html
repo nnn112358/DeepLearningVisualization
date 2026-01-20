@@ -1,0 +1,604 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Tensor Operations Animation</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+            background: #fff;
+            padding: 20px;
+            color: #333;
+        }
+        h1 {
+            text-align: center;
+            margin-bottom: 20px;
+            font-weight: 500;
+        }
+        .controls {
+            display: flex;
+            justify-content: center;
+            gap: 10px;
+            margin-bottom: 20px;
+            flex-wrap: wrap;
+            align-items: center;
+        }
+        .setting-group {
+            display: flex;
+            align-items: center;
+            gap: 5px;
+            font-size: 14px;
+        }
+        .setting-group label {
+            color: #666;
+        }
+        .setting-group select {
+            padding: 6px 12px;
+            border: 1px solid #ccc;
+            border-radius: 4px;
+            background: #fff;
+            font-size: 14px;
+        }
+        button {
+            padding: 8px 16px;
+            font-size: 14px;
+            border: 1px solid #ccc;
+            border-radius: 4px;
+            cursor: pointer;
+            background: #fff;
+        }
+        button:hover {
+            background: #f0f0f0;
+        }
+        .container {
+            display: flex;
+            flex-wrap: wrap;
+            justify-content: center;
+            gap: 30px;
+            margin-bottom: 20px;
+            align-items: flex-start;
+        }
+        .matrix-container {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+        }
+        .matrix-label {
+            font-size: 14px;
+            margin-bottom: 8px;
+            color: #666;
+        }
+        .matrix {
+            display: grid;
+            gap: 1px;
+            background: #ddd;
+            padding: 1px;
+        }
+        .cell {
+            width: 40px;
+            height: 32px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 11px;
+            background: #f5f5f5;
+            transition: background 0.3s;
+        }
+        .input-cell.highlight {
+            background: #ffcccc;
+        }
+        .output-cell.computed {
+            background: #ccffcc;
+        }
+        .output-cell.current {
+            background: #ffffcc;
+        }
+        .color-0 { background: #ffcccc; }
+        .color-1 { background: #ccffcc; }
+        .color-2 { background: #ccccff; }
+        .color-3 { background: #ffffcc; }
+        .color-4 { background: #ffccff; }
+        .color-5 { background: #ccffff; }
+        .arrow-symbol {
+            font-size: 24px;
+            color: #666;
+            display: flex;
+            align-items: center;
+            padding-top: 30px;
+        }
+        .calculation {
+            text-align: center;
+            padding: 15px;
+            background: #f9f9f9;
+            border: 1px solid #eee;
+            margin: 20px auto;
+            max-width: 700px;
+            font-family: monospace;
+            font-size: 13px;
+            line-height: 1.6;
+        }
+        .formula {
+            text-align: center;
+            padding: 10px;
+            background: #f0f8ff;
+            border: 1px solid #ddd;
+            margin: 10px auto;
+            max-width: 600px;
+            font-family: monospace;
+            font-size: 14px;
+        }
+        .speed-control {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            font-size: 14px;
+            color: #666;
+        }
+        .speed-control input {
+            width: 80px;
+        }
+        .shape-info {
+            font-size: 12px;
+            color: #888;
+            margin-top: 5px;
+        }
+    </style>
+</head>
+<body>
+    <h1>Tensor Operations Animation</h1>
+
+    <div class="controls">
+        <div class="setting-group">
+            <label>Operation:</label>
+            <select id="operation" onchange="changeOperation()">
+                <option value="reshape">Reshape</option>
+                <option value="transpose">Transpose</option>
+                <option value="flatten">Flatten</option>
+                <option value="squeeze">Squeeze</option>
+                <option value="unsqueeze">Unsqueeze</option>
+                <option value="concat">Concat</option>
+                <option value="split">Split</option>
+                <option value="slice">Slice</option>
+                <option value="gather">Gather</option>
+            </select>
+        </div>
+        <button id="playBtn" onclick="togglePlay()">Play</button>
+        <button onclick="step()">Step</button>
+        <button onclick="reset()">Reset</button>
+        <div class="speed-control">
+            <label>Speed:</label>
+            <input type="range" id="speed" min="100" max="1500" value="400">
+        </div>
+    </div>
+
+    <div class="formula" id="formula">Reshape: (2, 6) -> (3, 4)</div>
+
+    <div class="container" id="mainContainer">
+    </div>
+
+    <div class="calculation" id="calculation">
+        Click "Play" or "Step" to start.
+    </div>
+
+    <script>
+        let currentOp = 'reshape';
+        let inputData = [];
+        let outputData = [];
+        let currentIdx = 0;
+        let isPlaying = false;
+        let intervalId = null;
+        let mappings = [];
+
+        const operations = {
+            reshape: {
+                formula: 'Reshape: (2, 6) -> (3, 4)',
+                inputShape: [2, 6],
+                outputShape: [3, 4],
+                setup: function() {
+                    inputData = generateMatrix(2, 6);
+                    outputData = createEmptyMatrix(3, 4);
+                    mappings = [];
+                    let idx = 0;
+                    for (let i = 0; i < 2; i++) {
+                        for (let j = 0; j < 6; j++) {
+                            const outI = Math.floor(idx / 4);
+                            const outJ = idx % 4;
+                            mappings.push({
+                                from: { i, j, val: inputData[i][j] },
+                                to: { i: outI, j: outJ }
+                            });
+                            idx++;
+                        }
+                    }
+                }
+            },
+            transpose: {
+                formula: 'Transpose: (3, 4) -> (4, 3)',
+                inputShape: [3, 4],
+                outputShape: [4, 3],
+                setup: function() {
+                    inputData = generateMatrix(3, 4);
+                    outputData = createEmptyMatrix(4, 3);
+                    mappings = [];
+                    for (let i = 0; i < 3; i++) {
+                        for (let j = 0; j < 4; j++) {
+                            mappings.push({
+                                from: { i, j, val: inputData[i][j] },
+                                to: { i: j, j: i }
+                            });
+                        }
+                    }
+                }
+            },
+            flatten: {
+                formula: 'Flatten: (2, 3, 2) -> (2, 6)',
+                inputShape: [2, 6],
+                outputShape: [1, 12],
+                setup: function() {
+                    inputData = generateMatrix(2, 6);
+                    outputData = createEmptyMatrix(1, 12);
+                    mappings = [];
+                    let idx = 0;
+                    for (let i = 0; i < 2; i++) {
+                        for (let j = 0; j < 6; j++) {
+                            mappings.push({
+                                from: { i, j, val: inputData[i][j] },
+                                to: { i: 0, j: idx }
+                            });
+                            idx++;
+                        }
+                    }
+                }
+            },
+            squeeze: {
+                formula: 'Squeeze: (1, 4) -> (4,)',
+                inputShape: [1, 4],
+                outputShape: [1, 4],
+                setup: function() {
+                    inputData = generateMatrix(1, 4);
+                    outputData = createEmptyMatrix(1, 4);
+                    mappings = [];
+                    for (let j = 0; j < 4; j++) {
+                        mappings.push({
+                            from: { i: 0, j, val: inputData[0][j] },
+                            to: { i: 0, j }
+                        });
+                    }
+                }
+            },
+            unsqueeze: {
+                formula: 'Unsqueeze: (4,) -> (1, 4)',
+                inputShape: [1, 4],
+                outputShape: [1, 4],
+                setup: function() {
+                    inputData = generateMatrix(1, 4);
+                    outputData = createEmptyMatrix(1, 4);
+                    mappings = [];
+                    for (let j = 0; j < 4; j++) {
+                        mappings.push({
+                            from: { i: 0, j, val: inputData[0][j] },
+                            to: { i: 0, j }
+                        });
+                    }
+                }
+            },
+            concat: {
+                formula: 'Concat: (2, 3) + (2, 3) -> (2, 6) along axis=1',
+                inputShape: [2, 3],
+                outputShape: [2, 6],
+                setup: function() {
+                    inputData = generateMatrix(2, 3);
+                    this.inputB = generateMatrix(2, 3);
+                    outputData = createEmptyMatrix(2, 6);
+                    mappings = [];
+                    for (let i = 0; i < 2; i++) {
+                        for (let j = 0; j < 3; j++) {
+                            mappings.push({
+                                from: { i, j, val: inputData[i][j], source: 'A' },
+                                to: { i, j }
+                            });
+                        }
+                        for (let j = 0; j < 3; j++) {
+                            mappings.push({
+                                from: { i, j, val: this.inputB[i][j], source: 'B' },
+                                to: { i, j: j + 3 }
+                            });
+                        }
+                    }
+                },
+                inputB: []
+            },
+            split: {
+                formula: 'Split: (2, 6) -> (2, 3), (2, 3) along axis=1',
+                inputShape: [2, 6],
+                outputShape: [2, 3],
+                setup: function() {
+                    inputData = generateMatrix(2, 6);
+                    outputData = createEmptyMatrix(2, 3);
+                    this.outputB = createEmptyMatrix(2, 3);
+                    mappings = [];
+                    for (let i = 0; i < 2; i++) {
+                        for (let j = 0; j < 3; j++) {
+                            mappings.push({
+                                from: { i, j, val: inputData[i][j] },
+                                to: { i, j, target: 'A' }
+                            });
+                        }
+                        for (let j = 3; j < 6; j++) {
+                            mappings.push({
+                                from: { i, j, val: inputData[i][j] },
+                                to: { i, j: j - 3, target: 'B' }
+                            });
+                        }
+                    }
+                },
+                outputB: []
+            },
+            slice: {
+                formula: 'Slice: input[0:2, 1:4] from (3, 5)',
+                inputShape: [3, 5],
+                outputShape: [2, 3],
+                setup: function() {
+                    inputData = generateMatrix(3, 5);
+                    outputData = createEmptyMatrix(2, 3);
+                    mappings = [];
+                    for (let i = 0; i < 2; i++) {
+                        for (let j = 0; j < 3; j++) {
+                            mappings.push({
+                                from: { i, j: j + 1, val: inputData[i][j + 1] },
+                                to: { i, j }
+                            });
+                        }
+                    }
+                }
+            },
+            gather: {
+                formula: 'Gather: indices=[0, 2, 1] from (4, 3)',
+                inputShape: [4, 3],
+                outputShape: [3, 3],
+                setup: function() {
+                    inputData = generateMatrix(4, 3);
+                    outputData = createEmptyMatrix(3, 3);
+                    const indices = [0, 2, 1];
+                    mappings = [];
+                    for (let outI = 0; outI < 3; outI++) {
+                        const srcI = indices[outI];
+                        for (let j = 0; j < 3; j++) {
+                            mappings.push({
+                                from: { i: srcI, j, val: inputData[srcI][j] },
+                                to: { i: outI, j }
+                            });
+                        }
+                    }
+                }
+            }
+        };
+
+        function generateMatrix(rows, cols) {
+            const arr = [];
+            for (let i = 0; i < rows; i++) {
+                arr[i] = [];
+                for (let j = 0; j < cols; j++) {
+                    arr[i][j] = Math.floor(Math.random() * 10);
+                }
+            }
+            return arr;
+        }
+
+        function createEmptyMatrix(rows, cols) {
+            const arr = [];
+            for (let i = 0; i < rows; i++) {
+                arr[i] = [];
+                for (let j = 0; j < cols; j++) {
+                    arr[i][j] = null;
+                }
+            }
+            return arr;
+        }
+
+        function changeOperation() {
+            currentOp = document.getElementById('operation').value;
+            document.getElementById('formula').textContent = operations[currentOp].formula;
+            reset();
+        }
+
+        function renderAll() {
+            const container = document.getElementById('mainContainer');
+            container.innerHTML = '';
+            const op = operations[currentOp];
+
+            // Input A
+            const inputContainer = document.createElement('div');
+            inputContainer.className = 'matrix-container';
+            inputContainer.innerHTML = `<div class="matrix-label">Input${currentOp === 'concat' ? ' A' : ''}</div>`;
+            const inputMatrix = document.createElement('div');
+            inputMatrix.className = 'matrix';
+            inputMatrix.id = 'inputMatrix';
+            inputMatrix.style.gridTemplateColumns = `repeat(${op.inputShape[1]}, 40px)`;
+            for (let i = 0; i < op.inputShape[0]; i++) {
+                for (let j = 0; j < op.inputShape[1]; j++) {
+                    const cell = document.createElement('div');
+                    cell.className = 'cell input-cell';
+                    cell.id = `input-${i}-${j}`;
+                    cell.textContent = inputData[i][j];
+                    inputMatrix.appendChild(cell);
+                }
+            }
+            inputContainer.appendChild(inputMatrix);
+            inputContainer.innerHTML += `<div class="shape-info">Shape: (${op.inputShape.join(', ')})</div>`;
+            container.appendChild(inputContainer);
+
+            // Input B for concat
+            if (currentOp === 'concat' && op.inputB) {
+                const arrow1 = document.createElement('div');
+                arrow1.className = 'arrow-symbol';
+                arrow1.textContent = '+';
+                container.appendChild(arrow1);
+
+                const inputBContainer = document.createElement('div');
+                inputBContainer.className = 'matrix-container';
+                inputBContainer.innerHTML = `<div class="matrix-label">Input B</div>`;
+                const inputBMatrix = document.createElement('div');
+                inputBMatrix.className = 'matrix';
+                inputBMatrix.id = 'inputBMatrix';
+                inputBMatrix.style.gridTemplateColumns = `repeat(${op.inputShape[1]}, 40px)`;
+                for (let i = 0; i < op.inputShape[0]; i++) {
+                    for (let j = 0; j < op.inputShape[1]; j++) {
+                        const cell = document.createElement('div');
+                        cell.className = 'cell input-cell';
+                        cell.id = `inputB-${i}-${j}`;
+                        cell.textContent = op.inputB[i][j];
+                        inputBMatrix.appendChild(cell);
+                    }
+                }
+                inputBContainer.appendChild(inputBMatrix);
+                inputBContainer.innerHTML += `<div class="shape-info">Shape: (${op.inputShape.join(', ')})</div>`;
+                container.appendChild(inputBContainer);
+            }
+
+            // Arrow
+            const arrow = document.createElement('div');
+            arrow.className = 'arrow-symbol';
+            arrow.textContent = '→';
+            container.appendChild(arrow);
+
+            // Output A
+            const outputContainer = document.createElement('div');
+            outputContainer.className = 'matrix-container';
+            outputContainer.innerHTML = `<div class="matrix-label">Output${currentOp === 'split' ? ' A' : ''}</div>`;
+            const outputMatrix = document.createElement('div');
+            outputMatrix.className = 'matrix';
+            outputMatrix.id = 'outputMatrix';
+            outputMatrix.style.gridTemplateColumns = `repeat(${op.outputShape[1]}, 40px)`;
+            for (let i = 0; i < op.outputShape[0]; i++) {
+                for (let j = 0; j < op.outputShape[1]; j++) {
+                    const cell = document.createElement('div');
+                    cell.className = 'cell output-cell';
+                    cell.id = `output-${i}-${j}`;
+                    cell.textContent = '?';
+                    outputMatrix.appendChild(cell);
+                }
+            }
+            outputContainer.appendChild(outputMatrix);
+            outputContainer.innerHTML += `<div class="shape-info">Shape: (${op.outputShape.join(', ')})</div>`;
+            container.appendChild(outputContainer);
+
+            // Output B for split
+            if (currentOp === 'split' && op.outputB) {
+                const outputBContainer = document.createElement('div');
+                outputBContainer.className = 'matrix-container';
+                outputBContainer.innerHTML = `<div class="matrix-label">Output B</div>`;
+                const outputBMatrix = document.createElement('div');
+                outputBMatrix.className = 'matrix';
+                outputBMatrix.id = 'outputBMatrix';
+                outputBMatrix.style.gridTemplateColumns = `repeat(${op.outputShape[1]}, 40px)`;
+                for (let i = 0; i < op.outputShape[0]; i++) {
+                    for (let j = 0; j < op.outputShape[1]; j++) {
+                        const cell = document.createElement('div');
+                        cell.className = 'cell output-cell';
+                        cell.id = `outputB-${i}-${j}`;
+                        cell.textContent = '?';
+                        outputBMatrix.appendChild(cell);
+                    }
+                }
+                outputBContainer.appendChild(outputBMatrix);
+                outputBContainer.innerHTML += `<div class="shape-info">Shape: (${op.outputShape.join(', ')})</div>`;
+                container.appendChild(outputBContainer);
+            }
+        }
+
+        function step() {
+            if (currentIdx >= mappings.length) {
+                document.getElementById('calculation').innerHTML = '<div style="font-weight:bold">Complete</div>';
+                stopPlay();
+                return false;
+            }
+
+            // Clear highlights
+            document.querySelectorAll('.input-cell').forEach(c => c.classList.remove('highlight'));
+            document.querySelectorAll('.output-cell').forEach(c => c.classList.remove('current'));
+
+            const m = mappings[currentIdx];
+
+            // Highlight input
+            if (m.from.source === 'B') {
+                const inputCell = document.getElementById(`inputB-${m.from.i}-${m.from.j}`);
+                if (inputCell) inputCell.classList.add('highlight');
+            } else {
+                const inputCell = document.getElementById(`input-${m.from.i}-${m.from.j}`);
+                if (inputCell) inputCell.classList.add('highlight');
+            }
+
+            // Update output
+            let outputCell;
+            if (m.to.target === 'B') {
+                outputCell = document.getElementById(`outputB-${m.to.i}-${m.to.j}`);
+            } else {
+                outputCell = document.getElementById(`output-${m.to.i}-${m.to.j}`);
+            }
+            if (outputCell) {
+                outputCell.classList.add('current');
+                outputCell.textContent = m.from.val;
+                outputCell.classList.add('computed');
+            }
+
+            const sourceLabel = m.from.source ? ` (${m.from.source})` : '';
+            const targetLabel = m.to.target ? ` ${m.to.target}` : '';
+            document.getElementById('calculation').innerHTML = `
+                <div>Input${sourceLabel}[${m.from.i}][${m.from.j}] = ${m.from.val}</div>
+                <div>↓</div>
+                <div>Output${targetLabel}[${m.to.i}][${m.to.j}] = ${m.from.val}</div>
+            `;
+
+            currentIdx++;
+            return currentIdx < mappings.length;
+        }
+
+        function togglePlay() {
+            if (isPlaying) {
+                stopPlay();
+            } else {
+                startPlay();
+            }
+        }
+
+        function startPlay() {
+            isPlaying = true;
+            document.getElementById('playBtn').textContent = 'Pause';
+            const speed = 1600 - parseInt(document.getElementById('speed').value);
+            intervalId = setInterval(() => {
+                if (!step()) {
+                    stopPlay();
+                }
+            }, speed);
+        }
+
+        function stopPlay() {
+            isPlaying = false;
+            document.getElementById('playBtn').textContent = 'Play';
+            if (intervalId) {
+                clearInterval(intervalId);
+                intervalId = null;
+            }
+        }
+
+        function reset() {
+            stopPlay();
+            currentIdx = 0;
+            operations[currentOp].setup();
+            renderAll();
+            document.getElementById('calculation').innerHTML = 'Click "Play" or "Step" to start.';
+        }
+
+        window.onload = function() {
+            changeOperation();
+        };
+    </script>
+</body>
+</html>

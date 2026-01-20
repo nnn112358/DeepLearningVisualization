@@ -1,0 +1,481 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Math Operations Animation</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+            background: #fff;
+            padding: 20px;
+            color: #333;
+        }
+        h1 {
+            text-align: center;
+            margin-bottom: 20px;
+            font-weight: 500;
+        }
+        .controls {
+            display: flex;
+            justify-content: center;
+            gap: 10px;
+            margin-bottom: 20px;
+            flex-wrap: wrap;
+            align-items: center;
+        }
+        .setting-group {
+            display: flex;
+            align-items: center;
+            gap: 5px;
+            font-size: 14px;
+        }
+        .setting-group label {
+            color: #666;
+        }
+        .setting-group select {
+            padding: 6px 12px;
+            border: 1px solid #ccc;
+            border-radius: 4px;
+            background: #fff;
+            font-size: 14px;
+        }
+        button {
+            padding: 8px 16px;
+            font-size: 14px;
+            border: 1px solid #ccc;
+            border-radius: 4px;
+            cursor: pointer;
+            background: #fff;
+        }
+        button:hover {
+            background: #f0f0f0;
+        }
+        .container {
+            display: flex;
+            flex-wrap: wrap;
+            justify-content: center;
+            gap: 30px;
+            margin-bottom: 20px;
+            align-items: flex-start;
+        }
+        .matrix-container {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+        }
+        .matrix-label {
+            font-size: 14px;
+            margin-bottom: 8px;
+            color: #666;
+        }
+        .matrix {
+            display: grid;
+            gap: 1px;
+            background: #ddd;
+            padding: 1px;
+        }
+        .cell {
+            width: 50px;
+            height: 36px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 11px;
+            background: #f5f5f5;
+        }
+        .input-cell.highlight {
+            background: #ffcccc;
+        }
+        .input-b-cell.highlight {
+            background: #cce5ff;
+        }
+        .output-cell.computed {
+            background: #ccffcc;
+        }
+        .output-cell.current {
+            background: #ffffcc;
+        }
+        .operator-symbol {
+            font-size: 24px;
+            color: #666;
+            display: flex;
+            align-items: center;
+            padding-top: 30px;
+        }
+        .calculation {
+            text-align: center;
+            padding: 15px;
+            background: #f9f9f9;
+            border: 1px solid #eee;
+            margin: 20px auto;
+            max-width: 700px;
+            font-family: monospace;
+            font-size: 13px;
+            line-height: 1.6;
+        }
+        .formula {
+            text-align: center;
+            padding: 10px;
+            background: #f0f8ff;
+            border: 1px solid #ddd;
+            margin: 10px auto;
+            max-width: 500px;
+            font-family: monospace;
+            font-size: 14px;
+        }
+        .speed-control {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            font-size: 14px;
+            color: #666;
+        }
+        .speed-control input {
+            width: 80px;
+        }
+        .hidden {
+            display: none;
+        }
+    </style>
+</head>
+<body>
+    <h1>Math Operations Animation</h1>
+
+    <div class="controls">
+        <div class="setting-group">
+            <label>Operation:</label>
+            <select id="operation" onchange="changeOperation()">
+                <option value="add">Add (A + B)</option>
+                <option value="sub">Sub (A - B)</option>
+                <option value="mul">Mul (A × B)</option>
+                <option value="div">Div (A / B)</option>
+                <option value="neg">Neg (-A)</option>
+                <option value="pow">Pow (A ^ n)</option>
+                <option value="exp">Exp (e^A)</option>
+                <option value="log">Log (ln A)</option>
+                <option value="sqrt">Sqrt (√A)</option>
+                <option value="clip">Clip (clamp A)</option>
+            </select>
+        </div>
+        <button id="playBtn" onclick="togglePlay()">Play</button>
+        <button onclick="step()">Step</button>
+        <button onclick="reset()">Reset</button>
+        <div class="speed-control">
+            <label>Speed:</label>
+            <input type="range" id="speed" min="100" max="1500" value="500">
+        </div>
+    </div>
+
+    <div class="formula" id="formula">C = A + B (element-wise)</div>
+
+    <div class="container">
+        <div class="matrix-container">
+            <div class="matrix-label">Input A</div>
+            <div id="inputAMatrix" class="matrix"></div>
+        </div>
+        <div class="operator-symbol" id="opSymbol">+</div>
+        <div class="matrix-container" id="inputBContainer">
+            <div class="matrix-label">Input B</div>
+            <div id="inputBMatrix" class="matrix"></div>
+        </div>
+        <div class="operator-symbol">=</div>
+        <div class="matrix-container">
+            <div class="matrix-label">Output</div>
+            <div id="outputMatrix" class="matrix"></div>
+        </div>
+    </div>
+
+    <div class="calculation" id="calculation">
+        Click "Play" or "Step" to start.
+    </div>
+
+    <script>
+        const operations = {
+            add: {
+                formula: 'C = A + B (element-wise)',
+                symbol: '+',
+                needsB: true,
+                fn: (a, b) => a + b
+            },
+            sub: {
+                formula: 'C = A - B (element-wise)',
+                symbol: '-',
+                needsB: true,
+                fn: (a, b) => a - b
+            },
+            mul: {
+                formula: 'C = A × B (element-wise)',
+                symbol: '×',
+                needsB: true,
+                fn: (a, b) => a * b
+            },
+            div: {
+                formula: 'C = A / B (element-wise)',
+                symbol: '/',
+                needsB: true,
+                fn: (a, b) => b !== 0 ? a / b : 0
+            },
+            neg: {
+                formula: 'C = -A (negate)',
+                symbol: '-',
+                needsB: false,
+                fn: (a) => -a
+            },
+            pow: {
+                formula: 'C = A ^ 2 (power)',
+                symbol: '^2',
+                needsB: false,
+                fn: (a) => a * a
+            },
+            exp: {
+                formula: 'C = e^A (exponential)',
+                symbol: 'exp',
+                needsB: false,
+                fn: (a) => Math.exp(a)
+            },
+            log: {
+                formula: 'C = ln(A) (natural log, A > 0)',
+                symbol: 'ln',
+                needsB: false,
+                fn: (a) => a > 0 ? Math.log(a) : NaN
+            },
+            sqrt: {
+                formula: 'C = √A (square root, A >= 0)',
+                symbol: '√',
+                needsB: false,
+                fn: (a) => a >= 0 ? Math.sqrt(a) : NaN
+            },
+            clip: {
+                formula: 'C = clip(A, min=-1, max=1)',
+                symbol: 'clip',
+                needsB: false,
+                fn: (a) => Math.max(-1, Math.min(1, a))
+            }
+        };
+
+        let inputA = [];
+        let inputB = [];
+        let outputData = [];
+        const rows = 4;
+        const cols = 4;
+        let currentIdx = 0;
+        let isPlaying = false;
+        let intervalId = null;
+        let currentOp = 'add';
+
+        function generateInput(positiveOnly = false) {
+            const arr = [];
+            for (let i = 0; i < rows; i++) {
+                arr[i] = [];
+                for (let j = 0; j < cols; j++) {
+                    if (positiveOnly) {
+                        arr[i][j] = (Math.random() * 5 + 0.1).toFixed(2);
+                    } else {
+                        arr[i][j] = (Math.random() * 6 - 3).toFixed(2);
+                    }
+                }
+            }
+            return arr;
+        }
+
+        function changeOperation() {
+            currentOp = document.getElementById('operation').value;
+            const op = operations[currentOp];
+            document.getElementById('formula').textContent = op.formula;
+            document.getElementById('opSymbol').textContent = op.symbol;
+            document.getElementById('inputBContainer').classList.toggle('hidden', !op.needsB);
+            reset();
+        }
+
+        function renderMatrices() {
+            const op = operations[currentOp];
+
+            // Input A
+            const inputAMatrix = document.getElementById('inputAMatrix');
+            inputAMatrix.style.gridTemplateColumns = `repeat(${cols}, 50px)`;
+            inputAMatrix.innerHTML = '';
+            for (let i = 0; i < rows; i++) {
+                for (let j = 0; j < cols; j++) {
+                    const cell = document.createElement('div');
+                    cell.className = 'cell input-cell';
+                    cell.id = `inputA-${i}-${j}`;
+                    cell.textContent = inputA[i][j];
+                    inputAMatrix.appendChild(cell);
+                }
+            }
+
+            // Input B
+            if (op.needsB) {
+                const inputBMatrix = document.getElementById('inputBMatrix');
+                inputBMatrix.style.gridTemplateColumns = `repeat(${cols}, 50px)`;
+                inputBMatrix.innerHTML = '';
+                for (let i = 0; i < rows; i++) {
+                    for (let j = 0; j < cols; j++) {
+                        const cell = document.createElement('div');
+                        cell.className = 'cell input-b-cell';
+                        cell.id = `inputB-${i}-${j}`;
+                        cell.textContent = inputB[i][j];
+                        inputBMatrix.appendChild(cell);
+                    }
+                }
+            }
+
+            // Output
+            const outputMatrix = document.getElementById('outputMatrix');
+            outputMatrix.style.gridTemplateColumns = `repeat(${cols}, 50px)`;
+            outputMatrix.innerHTML = '';
+            for (let i = 0; i < rows; i++) {
+                for (let j = 0; j < cols; j++) {
+                    const cell = document.createElement('div');
+                    cell.className = 'cell output-cell';
+                    cell.id = `output-${i}-${j}`;
+                    cell.textContent = '?';
+                    outputMatrix.appendChild(cell);
+                }
+            }
+
+            outputData = [];
+            for (let i = 0; i < rows; i++) {
+                outputData[i] = [];
+                for (let j = 0; j < cols; j++) {
+                    outputData[i][j] = null;
+                }
+            }
+        }
+
+        function step() {
+            if (currentIdx >= rows * cols) {
+                document.getElementById('calculation').innerHTML = '<div style="font-weight:bold">Complete</div>';
+                stopPlay();
+                return false;
+            }
+
+            const i = Math.floor(currentIdx / cols);
+            const j = currentIdx % cols;
+            const op = operations[currentOp];
+
+            // Clear highlights
+            document.querySelectorAll('.input-cell').forEach(c => c.classList.remove('highlight'));
+            document.querySelectorAll('.input-b-cell').forEach(c => c.classList.remove('highlight'));
+            document.querySelectorAll('.output-cell').forEach(c => c.classList.remove('current'));
+
+            // Highlight current cells
+            document.getElementById(`inputA-${i}-${j}`).classList.add('highlight');
+            if (op.needsB) {
+                document.getElementById(`inputB-${i}-${j}`).classList.add('highlight');
+            }
+
+            const outputCell = document.getElementById(`output-${i}-${j}`);
+            outputCell.classList.add('current');
+
+            // Compute
+            const a = parseFloat(inputA[i][j]);
+            const b = op.needsB ? parseFloat(inputB[i][j]) : null;
+            const result = op.needsB ? op.fn(a, b) : op.fn(a);
+            const resultStr = isNaN(result) ? 'NaN' : result.toFixed(3);
+
+            outputData[i][j] = resultStr;
+            outputCell.textContent = resultStr;
+            outputCell.classList.add('computed');
+
+            // Update calculation display
+            let calcText;
+            if (op.needsB) {
+                calcText = `A[${i}][${j}] ${op.symbol} B[${i}][${j}] = ${a} ${op.symbol} ${b} = ${resultStr}`;
+            } else {
+                switch (currentOp) {
+                    case 'neg':
+                        calcText = `-A[${i}][${j}] = -${a} = ${resultStr}`;
+                        break;
+                    case 'pow':
+                        calcText = `A[${i}][${j}]^2 = ${a}^2 = ${resultStr}`;
+                        break;
+                    case 'exp':
+                        calcText = `e^A[${i}][${j}] = e^${a} = ${resultStr}`;
+                        break;
+                    case 'log':
+                        calcText = `ln(A[${i}][${j}]) = ln(${a}) = ${resultStr}`;
+                        break;
+                    case 'sqrt':
+                        calcText = `√A[${i}][${j}] = √${a} = ${resultStr}`;
+                        break;
+                    case 'clip':
+                        calcText = `clip(A[${i}][${j}], -1, 1) = clip(${a}) = ${resultStr}`;
+                        break;
+                    default:
+                        calcText = `${resultStr}`;
+                }
+            }
+
+            document.getElementById('calculation').innerHTML = `
+                <div>Output[${i}][${j}]</div>
+                <div>${calcText}</div>
+            `;
+
+            currentIdx++;
+            return currentIdx < rows * cols;
+        }
+
+        function togglePlay() {
+            if (isPlaying) {
+                stopPlay();
+            } else {
+                startPlay();
+            }
+        }
+
+        function startPlay() {
+            isPlaying = true;
+            document.getElementById('playBtn').textContent = 'Pause';
+            const speed = 1600 - parseInt(document.getElementById('speed').value);
+            intervalId = setInterval(() => {
+                if (!step()) {
+                    stopPlay();
+                }
+            }, speed);
+        }
+
+        function stopPlay() {
+            isPlaying = false;
+            document.getElementById('playBtn').textContent = 'Play';
+            if (intervalId) {
+                clearInterval(intervalId);
+                intervalId = null;
+            }
+        }
+
+        function reset() {
+            stopPlay();
+            currentIdx = 0;
+
+            const positiveOnly = (currentOp === 'log' || currentOp === 'sqrt');
+            inputA = generateInput(positiveOnly);
+            inputB = generateInput(false);
+
+            // Avoid division by zero
+            if (currentOp === 'div') {
+                for (let i = 0; i < rows; i++) {
+                    for (let j = 0; j < cols; j++) {
+                        if (Math.abs(parseFloat(inputB[i][j])) < 0.1) {
+                            inputB[i][j] = (Math.random() * 2 + 0.5).toFixed(2);
+                        }
+                    }
+                }
+            }
+
+            renderMatrices();
+            document.getElementById('calculation').innerHTML = 'Click "Play" or "Step" to start.';
+        }
+
+        window.onload = function() {
+            changeOperation();
+        };
+    </script>
+</body>
+</html>

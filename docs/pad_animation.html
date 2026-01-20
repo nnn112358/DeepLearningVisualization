@@ -1,0 +1,380 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Pad Animation</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+            background: #fff;
+            padding: 20px;
+            color: #333;
+        }
+        h1 {
+            text-align: center;
+            margin-bottom: 20px;
+            font-weight: 500;
+        }
+        .container {
+            display: flex;
+            flex-wrap: wrap;
+            justify-content: center;
+            gap: 40px;
+            margin-bottom: 20px;
+            align-items: flex-start;
+        }
+        .matrix-container {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+        }
+        .matrix-label {
+            font-size: 14px;
+            margin-bottom: 8px;
+            color: #666;
+        }
+        .matrix {
+            display: grid;
+            gap: 1px;
+            background: #ddd;
+            padding: 1px;
+        }
+        .cell {
+            width: 36px;
+            height: 36px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 12px;
+            background: #f5f5f5;
+        }
+        .input-cell.highlight {
+            background: #ffcccc;
+        }
+        .output-cell.original {
+            background: #ccffcc;
+        }
+        .output-cell.padded {
+            background: #e5e5e5;
+        }
+        .output-cell.current {
+            background: #ffffcc;
+        }
+        .arrow-symbol {
+            font-size: 24px;
+            color: #666;
+            display: flex;
+            align-items: center;
+            padding-top: 30px;
+        }
+        .controls {
+            display: flex;
+            justify-content: center;
+            gap: 10px;
+            margin-bottom: 20px;
+            flex-wrap: wrap;
+            align-items: center;
+        }
+        button {
+            padding: 8px 16px;
+            font-size: 14px;
+            border: 1px solid #ccc;
+            border-radius: 4px;
+            cursor: pointer;
+            background: #fff;
+        }
+        button:hover {
+            background: #f0f0f0;
+        }
+        .speed-control {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            font-size: 14px;
+            color: #666;
+        }
+        .speed-control input {
+            width: 80px;
+        }
+        .calculation {
+            text-align: center;
+            padding: 15px;
+            background: #f9f9f9;
+            border: 1px solid #eee;
+            margin: 20px auto;
+            max-width: 700px;
+            font-family: monospace;
+            font-size: 13px;
+            line-height: 1.6;
+        }
+        .settings {
+            display: flex;
+            justify-content: center;
+            gap: 15px;
+            margin-bottom: 20px;
+            flex-wrap: wrap;
+            align-items: center;
+        }
+        .setting-group {
+            display: flex;
+            align-items: center;
+            gap: 5px;
+            font-size: 14px;
+        }
+        .setting-group label {
+            color: #666;
+        }
+        .setting-group select, .setting-group input {
+            padding: 6px;
+            border: 1px solid #ccc;
+            border-radius: 4px;
+            background: #fff;
+        }
+        .shape-info {
+            font-size: 11px;
+            color: #888;
+            margin-top: 4px;
+        }
+    </style>
+</head>
+<body>
+    <h1>Pad Animation</h1>
+
+    <div class="settings">
+        <div class="setting-group">
+            <label>Mode:</label>
+            <select id="padMode" onchange="initializeMatrices()">
+                <option value="constant">Constant (0)</option>
+                <option value="reflect">Reflect</option>
+                <option value="edge">Edge</option>
+            </select>
+        </div>
+        <div class="setting-group">
+            <label>Pad Size:</label>
+            <select id="padSize" onchange="initializeMatrices()">
+                <option value="1" selected>1</option>
+                <option value="2">2</option>
+            </select>
+        </div>
+        <button onclick="initializeMatrices()">Apply</button>
+    </div>
+
+    <div class="controls">
+        <button id="playBtn" onclick="togglePlay()">Play</button>
+        <button onclick="step()">Step</button>
+        <button onclick="reset()">Reset</button>
+        <div class="speed-control">
+            <label>Speed:</label>
+            <input type="range" id="speed" min="100" max="1500" value="400">
+        </div>
+    </div>
+
+    <div class="container">
+        <div class="matrix-container">
+            <div class="matrix-label">Input</div>
+            <div id="inputMatrix" class="matrix"></div>
+            <div class="shape-info" id="inputShape">(4, 4)</div>
+        </div>
+        <div class="arrow-symbol">→</div>
+        <div class="matrix-container">
+            <div class="matrix-label">Output (Padded)</div>
+            <div id="outputMatrix" class="matrix"></div>
+            <div class="shape-info" id="outputShape">(6, 6)</div>
+        </div>
+    </div>
+
+    <div class="calculation" id="calculation">
+        Click "Play" or "Step" to start.
+    </div>
+
+    <script>
+        let inputData = [];
+        let outputData = [];
+        const inputSize = 4;
+        let padSize = 1;
+        let outputSize = 6;
+        let padMode = 'constant';
+        let currentIdx = 0;
+        let isPlaying = false;
+        let intervalId = null;
+
+        function generateInput() {
+            inputData = [];
+            for (let i = 0; i < inputSize; i++) {
+                inputData[i] = [];
+                for (let j = 0; j < inputSize; j++) {
+                    inputData[i][j] = Math.floor(Math.random() * 9) + 1;
+                }
+            }
+        }
+
+        function getPadValue(outI, outJ) {
+            const inI = outI - padSize;
+            const inJ = outJ - padSize;
+
+            // Check if within original bounds
+            if (inI >= 0 && inI < inputSize && inJ >= 0 && inJ < inputSize) {
+                return { value: inputData[inI][inJ], type: 'original', srcI: inI, srcJ: inJ };
+            }
+
+            if (padMode === 'constant') {
+                return { value: 0, type: 'pad', srcI: -1, srcJ: -1 };
+            } else if (padMode === 'edge') {
+                const clampI = Math.max(0, Math.min(inputSize - 1, inI));
+                const clampJ = Math.max(0, Math.min(inputSize - 1, inJ));
+                return { value: inputData[clampI][clampJ], type: 'pad', srcI: clampI, srcJ: clampJ };
+            } else if (padMode === 'reflect') {
+                let refI = inI;
+                let refJ = inJ;
+                if (inI < 0) refI = -inI - 1;
+                else if (inI >= inputSize) refI = 2 * inputSize - inI - 1;
+                if (inJ < 0) refJ = -inJ - 1;
+                else if (inJ >= inputSize) refJ = 2 * inputSize - inJ - 1;
+                refI = Math.max(0, Math.min(inputSize - 1, refI));
+                refJ = Math.max(0, Math.min(inputSize - 1, refJ));
+                return { value: inputData[refI][refJ], type: 'pad', srcI: refI, srcJ: refJ };
+            }
+
+            return { value: 0, type: 'pad', srcI: -1, srcJ: -1 };
+        }
+
+        function initializeMatrices() {
+            padMode = document.getElementById('padMode').value;
+            padSize = parseInt(document.getElementById('padSize').value);
+            outputSize = inputSize + 2 * padSize;
+
+            generateInput();
+            renderMatrices();
+            reset();
+        }
+
+        function renderMatrices() {
+            // Input
+            const inputMatrix = document.getElementById('inputMatrix');
+            inputMatrix.style.gridTemplateColumns = `repeat(${inputSize}, 36px)`;
+            inputMatrix.innerHTML = '';
+            for (let i = 0; i < inputSize; i++) {
+                for (let j = 0; j < inputSize; j++) {
+                    const cell = document.createElement('div');
+                    cell.className = 'cell input-cell';
+                    cell.id = `input-${i}-${j}`;
+                    cell.textContent = inputData[i][j];
+                    inputMatrix.appendChild(cell);
+                }
+            }
+            document.getElementById('inputShape').textContent = `(${inputSize}, ${inputSize})`;
+
+            // Output
+            const outputMatrix = document.getElementById('outputMatrix');
+            outputMatrix.style.gridTemplateColumns = `repeat(${outputSize}, 36px)`;
+            outputMatrix.innerHTML = '';
+            outputData = [];
+            for (let i = 0; i < outputSize; i++) {
+                outputData[i] = [];
+                for (let j = 0; j < outputSize; j++) {
+                    outputData[i][j] = null;
+                    const cell = document.createElement('div');
+                    cell.className = 'cell output-cell';
+                    cell.id = `output-${i}-${j}`;
+                    cell.textContent = '?';
+                    outputMatrix.appendChild(cell);
+                }
+            }
+            document.getElementById('outputShape').textContent = `(${outputSize}, ${outputSize})`;
+        }
+
+        function step() {
+            if (currentIdx >= outputSize * outputSize) {
+                document.getElementById('calculation').innerHTML = '<div style="font-weight:bold">Complete</div>';
+                stopPlay();
+                return false;
+            }
+
+            const outI = Math.floor(currentIdx / outputSize);
+            const outJ = currentIdx % outputSize;
+
+            // Clear highlights
+            document.querySelectorAll('.input-cell').forEach(c => c.classList.remove('highlight'));
+            document.querySelectorAll('.output-cell').forEach(c => c.classList.remove('current'));
+
+            const { value, type, srcI, srcJ } = getPadValue(outI, outJ);
+
+            // Highlight source if available
+            if (srcI >= 0 && srcJ >= 0) {
+                const srcCell = document.getElementById(`input-${srcI}-${srcJ}`);
+                if (srcCell) srcCell.classList.add('highlight');
+            }
+
+            // Update output
+            const outputCell = document.getElementById(`output-${outI}-${outJ}`);
+            outputCell.classList.add('current');
+            outputCell.textContent = value;
+            outputCell.classList.add(type === 'original' ? 'original' : 'padded');
+
+            outputData[outI][outJ] = value;
+
+            let explanation;
+            if (type === 'original') {
+                explanation = `Copy from Input[${srcI}][${srcJ}] = ${value}`;
+            } else if (padMode === 'constant') {
+                explanation = `Pad with constant value = 0`;
+            } else if (padMode === 'edge') {
+                explanation = `Edge pad from Input[${srcI}][${srcJ}] = ${value}`;
+            } else {
+                explanation = `Reflect pad from Input[${srcI}][${srcJ}] = ${value}`;
+            }
+
+            document.getElementById('calculation').innerHTML = `
+                <div>Output[${outI}][${outJ}]</div>
+                <div>${explanation}</div>
+            `;
+
+            currentIdx++;
+            return currentIdx < outputSize * outputSize;
+        }
+
+        function togglePlay() {
+            if (isPlaying) {
+                stopPlay();
+            } else {
+                startPlay();
+            }
+        }
+
+        function startPlay() {
+            isPlaying = true;
+            document.getElementById('playBtn').textContent = 'Pause';
+            const speed = 1600 - parseInt(document.getElementById('speed').value);
+            intervalId = setInterval(() => {
+                if (!step()) {
+                    stopPlay();
+                }
+            }, speed);
+        }
+
+        function stopPlay() {
+            isPlaying = false;
+            document.getElementById('playBtn').textContent = 'Play';
+            if (intervalId) {
+                clearInterval(intervalId);
+                intervalId = null;
+            }
+        }
+
+        function reset() {
+            stopPlay();
+            currentIdx = 0;
+            renderMatrices();
+            document.getElementById('calculation').innerHTML = 'Click "Play" or "Step" to start.';
+        }
+
+        window.onload = initializeMatrices;
+    </script>
+</body>
+</html>

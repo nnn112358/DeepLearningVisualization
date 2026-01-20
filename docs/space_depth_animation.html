@@ -1,0 +1,462 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>SpaceToDepth / DepthToSpace Animation</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+            background: #fff;
+            padding: 20px;
+            color: #333;
+        }
+        h1 {
+            text-align: center;
+            margin-bottom: 20px;
+            font-weight: 500;
+        }
+        .container {
+            display: flex;
+            flex-wrap: wrap;
+            justify-content: center;
+            gap: 40px;
+            margin-bottom: 20px;
+            align-items: flex-start;
+        }
+        .matrix-container {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+        }
+        .matrix-label {
+            font-size: 14px;
+            margin-bottom: 8px;
+            color: #666;
+        }
+        .channel-group {
+            margin-bottom: 10px;
+        }
+        .channel-label {
+            font-size: 11px;
+            color: #888;
+            margin-bottom: 3px;
+            text-align: center;
+        }
+        .matrix {
+            display: grid;
+            gap: 1px;
+            background: #ddd;
+            padding: 1px;
+        }
+        .cell {
+            width: 32px;
+            height: 32px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 11px;
+            background: #f5f5f5;
+        }
+        .cell.color-0 { background: #ffcccc; }
+        .cell.color-1 { background: #ccffcc; }
+        .cell.color-2 { background: #ccccff; }
+        .cell.color-3 { background: #ffffcc; }
+        .cell.highlight {
+            outline: 3px solid #333;
+            outline-offset: -3px;
+        }
+        .arrow-symbol {
+            font-size: 24px;
+            color: #666;
+            display: flex;
+            align-items: center;
+            padding-top: 50px;
+        }
+        .controls {
+            display: flex;
+            justify-content: center;
+            gap: 10px;
+            margin-bottom: 20px;
+            flex-wrap: wrap;
+            align-items: center;
+        }
+        button {
+            padding: 8px 16px;
+            font-size: 14px;
+            border: 1px solid #ccc;
+            border-radius: 4px;
+            cursor: pointer;
+            background: #fff;
+        }
+        button:hover {
+            background: #f0f0f0;
+        }
+        .speed-control {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            font-size: 14px;
+            color: #666;
+        }
+        .speed-control input {
+            width: 80px;
+        }
+        .calculation {
+            text-align: center;
+            padding: 15px;
+            background: #f9f9f9;
+            border: 1px solid #eee;
+            margin: 20px auto;
+            max-width: 700px;
+            font-family: monospace;
+            font-size: 13px;
+            line-height: 1.6;
+        }
+        .settings {
+            display: flex;
+            justify-content: center;
+            gap: 15px;
+            margin-bottom: 20px;
+            flex-wrap: wrap;
+            align-items: center;
+        }
+        .setting-group {
+            display: flex;
+            align-items: center;
+            gap: 5px;
+            font-size: 14px;
+        }
+        .setting-group label {
+            color: #666;
+        }
+        .setting-group select {
+            padding: 6px;
+            border: 1px solid #ccc;
+            border-radius: 4px;
+            background: #fff;
+        }
+        .formula {
+            text-align: center;
+            padding: 10px;
+            background: #f0f8ff;
+            border: 1px solid #ddd;
+            margin: 10px auto;
+            max-width: 600px;
+            font-family: monospace;
+            font-size: 12px;
+        }
+    </style>
+</head>
+<body>
+    <h1>SpaceToDepth / DepthToSpace Animation</h1>
+
+    <div class="settings">
+        <div class="setting-group">
+            <label>Operation:</label>
+            <select id="operation" onchange="changeOperation()">
+                <option value="space_to_depth">SpaceToDepth</option>
+                <option value="depth_to_space">DepthToSpace</option>
+            </select>
+        </div>
+        <div class="setting-group">
+            <label>Block Size:</label>
+            <select id="blockSize" onchange="changeOperation()">
+                <option value="2" selected>2</option>
+            </select>
+        </div>
+        <button onclick="changeOperation()">Apply</button>
+    </div>
+
+    <div class="formula" id="formula">
+        SpaceToDepth: (1, C, H, W) → (1, C×block², H/block, W/block)
+    </div>
+
+    <div class="controls">
+        <button id="playBtn" onclick="togglePlay()">Play</button>
+        <button onclick="step()">Step</button>
+        <button onclick="reset()">Reset</button>
+        <div class="speed-control">
+            <label>Speed:</label>
+            <input type="range" id="speed" min="100" max="1500" value="500">
+        </div>
+    </div>
+
+    <div class="container" id="mainContainer">
+    </div>
+
+    <div class="calculation" id="calculation">
+        Click "Play" or "Step" to start.
+    </div>
+
+    <script>
+        let operation = 'space_to_depth';
+        let blockSize = 2;
+        let inputData = [];
+        let outputData = [];
+        let mappings = [];
+        let currentIdx = 0;
+        let isPlaying = false;
+        let intervalId = null;
+
+        function generateInput() {
+            if (operation === 'space_to_depth') {
+                // 1 channel, 4x4 spatial
+                inputData = [{
+                    data: [],
+                    rows: 4,
+                    cols: 4
+                }];
+                for (let i = 0; i < 4; i++) {
+                    inputData[0].data[i] = [];
+                    for (let j = 0; j < 4; j++) {
+                        inputData[0].data[i][j] = i * 4 + j + 1;
+                    }
+                }
+            } else {
+                // 4 channels, 2x2 spatial
+                inputData = [];
+                for (let c = 0; c < 4; c++) {
+                    inputData[c] = {
+                        data: [],
+                        rows: 2,
+                        cols: 2
+                    };
+                    for (let i = 0; i < 2; i++) {
+                        inputData[c].data[i] = [];
+                        for (let j = 0; j < 2; j++) {
+                            inputData[c].data[i][j] = c * 4 + i * 2 + j + 1;
+                        }
+                    }
+                }
+            }
+        }
+
+        function setupMappings() {
+            mappings = [];
+            if (operation === 'space_to_depth') {
+                // SpaceToDepth: (1, 4, 4) → (4, 2, 2)
+                outputData = [];
+                for (let c = 0; c < 4; c++) {
+                    outputData[c] = {
+                        data: [],
+                        rows: 2,
+                        cols: 2
+                    };
+                    for (let i = 0; i < 2; i++) {
+                        outputData[c].data[i] = [];
+                        for (let j = 0; j < 2; j++) {
+                            outputData[c].data[i][j] = null;
+                        }
+                    }
+                }
+
+                for (let outC = 0; outC < 4; outC++) {
+                    const blockRow = Math.floor(outC / blockSize);
+                    const blockCol = outC % blockSize;
+                    for (let outI = 0; outI < 2; outI++) {
+                        for (let outJ = 0; outJ < 2; outJ++) {
+                            const inI = outI * blockSize + blockRow;
+                            const inJ = outJ * blockSize + blockCol;
+                            mappings.push({
+                                inC: 0, inI, inJ,
+                                outC, outI, outJ,
+                                value: inputData[0].data[inI][inJ]
+                            });
+                        }
+                    }
+                }
+            } else {
+                // DepthToSpace: (4, 2, 2) → (1, 4, 4)
+                outputData = [{
+                    data: [],
+                    rows: 4,
+                    cols: 4
+                }];
+                for (let i = 0; i < 4; i++) {
+                    outputData[0].data[i] = [];
+                    for (let j = 0; j < 4; j++) {
+                        outputData[0].data[i][j] = null;
+                    }
+                }
+
+                for (let inC = 0; inC < 4; inC++) {
+                    const blockRow = Math.floor(inC / blockSize);
+                    const blockCol = inC % blockSize;
+                    for (let inI = 0; inI < 2; inI++) {
+                        for (let inJ = 0; inJ < 2; inJ++) {
+                            const outI = inI * blockSize + blockRow;
+                            const outJ = inJ * blockSize + blockCol;
+                            mappings.push({
+                                inC, inI, inJ,
+                                outC: 0, outI, outJ,
+                                value: inputData[inC].data[inI][inJ]
+                            });
+                        }
+                    }
+                }
+            }
+        }
+
+        function changeOperation() {
+            operation = document.getElementById('operation').value;
+            blockSize = parseInt(document.getElementById('blockSize').value);
+
+            if (operation === 'space_to_depth') {
+                document.getElementById('formula').textContent =
+                    'SpaceToDepth: (1, C, H, W) → (1, C×block², H/block, W/block)';
+            } else {
+                document.getElementById('formula').textContent =
+                    'DepthToSpace: (1, C, H, W) → (1, C/block², H×block, W×block)';
+            }
+
+            reset();
+        }
+
+        function renderAll() {
+            const container = document.getElementById('mainContainer');
+            container.innerHTML = '';
+
+            // Input
+            const inputContainer = document.createElement('div');
+            inputContainer.className = 'matrix-container';
+            inputContainer.innerHTML = `<div class="matrix-label">Input</div>`;
+
+            inputData.forEach((channel, c) => {
+                const channelDiv = document.createElement('div');
+                channelDiv.className = 'channel-group';
+                channelDiv.innerHTML = `<div class="channel-label">Channel ${c}</div>`;
+
+                const matrix = document.createElement('div');
+                matrix.className = 'matrix';
+                matrix.style.gridTemplateColumns = `repeat(${channel.cols}, 32px)`;
+
+                for (let i = 0; i < channel.rows; i++) {
+                    for (let j = 0; j < channel.cols; j++) {
+                        const cell = document.createElement('div');
+                        cell.className = `cell color-${c % 4}`;
+                        cell.id = `input-${c}-${i}-${j}`;
+                        cell.textContent = channel.data[i][j];
+                        matrix.appendChild(cell);
+                    }
+                }
+                channelDiv.appendChild(matrix);
+                inputContainer.appendChild(channelDiv);
+            });
+            container.appendChild(inputContainer);
+
+            // Arrow
+            const arrow = document.createElement('div');
+            arrow.className = 'arrow-symbol';
+            arrow.textContent = '→';
+            container.appendChild(arrow);
+
+            // Output
+            const outputContainer = document.createElement('div');
+            outputContainer.className = 'matrix-container';
+            outputContainer.innerHTML = `<div class="matrix-label">Output</div>`;
+
+            outputData.forEach((channel, c) => {
+                const channelDiv = document.createElement('div');
+                channelDiv.className = 'channel-group';
+                channelDiv.innerHTML = `<div class="channel-label">Channel ${c}</div>`;
+
+                const matrix = document.createElement('div');
+                matrix.className = 'matrix';
+                matrix.style.gridTemplateColumns = `repeat(${channel.cols}, 32px)`;
+
+                for (let i = 0; i < channel.rows; i++) {
+                    for (let j = 0; j < channel.cols; j++) {
+                        const cell = document.createElement('div');
+                        cell.className = `cell color-${c % 4}`;
+                        cell.id = `output-${c}-${i}-${j}`;
+                        cell.textContent = channel.data[i][j] !== null ? channel.data[i][j] : '?';
+                        matrix.appendChild(cell);
+                    }
+                }
+                channelDiv.appendChild(matrix);
+                outputContainer.appendChild(channelDiv);
+            });
+            container.appendChild(outputContainer);
+        }
+
+        function step() {
+            if (currentIdx >= mappings.length) {
+                document.getElementById('calculation').innerHTML = '<div style="font-weight:bold">Complete</div>';
+                stopPlay();
+                return false;
+            }
+
+            // Clear highlights
+            document.querySelectorAll('.cell').forEach(c => c.classList.remove('highlight'));
+
+            const m = mappings[currentIdx];
+
+            // Highlight input
+            const inputCell = document.getElementById(`input-${m.inC}-${m.inI}-${m.inJ}`);
+            if (inputCell) inputCell.classList.add('highlight');
+
+            // Update output
+            outputData[m.outC].data[m.outI][m.outJ] = m.value;
+            const outputCell = document.getElementById(`output-${m.outC}-${m.outI}-${m.outJ}`);
+            if (outputCell) {
+                outputCell.textContent = m.value;
+                outputCell.classList.add('highlight');
+            }
+
+            document.getElementById('calculation').innerHTML = `
+                <div>Input[C=${m.inC}][${m.inI}][${m.inJ}] = ${m.value}</div>
+                <div>↓</div>
+                <div>Output[C=${m.outC}][${m.outI}][${m.outJ}] = ${m.value}</div>
+            `;
+
+            currentIdx++;
+            return currentIdx < mappings.length;
+        }
+
+        function togglePlay() {
+            if (isPlaying) {
+                stopPlay();
+            } else {
+                startPlay();
+            }
+        }
+
+        function startPlay() {
+            isPlaying = true;
+            document.getElementById('playBtn').textContent = 'Pause';
+            const speed = 1600 - parseInt(document.getElementById('speed').value);
+            intervalId = setInterval(() => {
+                if (!step()) {
+                    stopPlay();
+                }
+            }, speed);
+        }
+
+        function stopPlay() {
+            isPlaying = false;
+            document.getElementById('playBtn').textContent = 'Play';
+            if (intervalId) {
+                clearInterval(intervalId);
+                intervalId = null;
+            }
+        }
+
+        function reset() {
+            stopPlay();
+            currentIdx = 0;
+            generateInput();
+            setupMappings();
+            renderAll();
+            document.getElementById('calculation').innerHTML = 'Click "Play" or "Step" to start.';
+        }
+
+        window.onload = reset;
+    </script>
+</body>
+</html>

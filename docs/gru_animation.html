@@ -1,0 +1,382 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>GRU Animation</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+            background: #fff;
+            padding: 20px;
+            color: #333;
+        }
+        h1 {
+            text-align: center;
+            margin-bottom: 20px;
+            font-weight: 500;
+        }
+        .container {
+            display: flex;
+            flex-wrap: wrap;
+            justify-content: center;
+            gap: 20px;
+            margin-bottom: 20px;
+        }
+        .gate-box {
+            padding: 15px;
+            border: 2px solid #ddd;
+            border-radius: 8px;
+            min-width: 150px;
+            text-align: center;
+        }
+        .gate-box.active {
+            border-color: #4a90d9;
+            background: #f0f8ff;
+        }
+        .gate-box.computed {
+            border-color: #28a745;
+            background: #e8f5e9;
+        }
+        .gate-label {
+            font-weight: bold;
+            margin-bottom: 8px;
+            font-size: 14px;
+        }
+        .gate-formula {
+            font-family: monospace;
+            font-size: 11px;
+            color: #666;
+            margin-bottom: 8px;
+        }
+        .gate-value {
+            font-family: monospace;
+            font-size: 16px;
+            font-weight: bold;
+            color: #333;
+        }
+        .sequence-container {
+            display: flex;
+            justify-content: center;
+            gap: 10px;
+            margin-bottom: 20px;
+            flex-wrap: wrap;
+        }
+        .seq-item {
+            padding: 10px 15px;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+            background: #f5f5f5;
+            font-family: monospace;
+            font-size: 12px;
+        }
+        .seq-item.current {
+            background: #ffffcc;
+            border-color: #ffc107;
+        }
+        .seq-item.processed {
+            background: #ccffcc;
+            border-color: #28a745;
+        }
+        .state-display {
+            display: flex;
+            justify-content: center;
+            gap: 30px;
+            margin-bottom: 20px;
+        }
+        .state-box {
+            padding: 15px 25px;
+            border: 2px solid #ddd;
+            border-radius: 8px;
+            text-align: center;
+        }
+        .state-label {
+            font-size: 12px;
+            color: #666;
+            margin-bottom: 5px;
+        }
+        .state-value {
+            font-family: monospace;
+            font-size: 14px;
+            font-weight: bold;
+        }
+        .controls {
+            display: flex;
+            justify-content: center;
+            gap: 10px;
+            margin-bottom: 20px;
+            flex-wrap: wrap;
+            align-items: center;
+        }
+        button {
+            padding: 8px 16px;
+            font-size: 14px;
+            border: 1px solid #ccc;
+            border-radius: 4px;
+            cursor: pointer;
+            background: #fff;
+        }
+        button:hover {
+            background: #f0f0f0;
+        }
+        .speed-control {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            font-size: 14px;
+            color: #666;
+        }
+        .speed-control input {
+            width: 80px;
+        }
+        .calculation {
+            text-align: center;
+            padding: 15px;
+            background: #f9f9f9;
+            border: 1px solid #eee;
+            margin: 20px auto;
+            max-width: 700px;
+            font-family: monospace;
+            font-size: 12px;
+            line-height: 1.8;
+        }
+        .formula-box {
+            text-align: center;
+            padding: 15px;
+            background: #f0f8ff;
+            border: 1px solid #ddd;
+            margin: 10px auto 20px;
+            max-width: 500px;
+            font-family: monospace;
+            font-size: 12px;
+            line-height: 1.8;
+        }
+    </style>
+</head>
+<body>
+    <h1>GRU (Gated Recurrent Unit) Animation</h1>
+
+    <div class="formula-box">
+        <div>z = σ(Wz·[h, x])</div>
+        <div>r = σ(Wr·[h, x])</div>
+        <div>h̃ = tanh(W·[r⊙h, x])</div>
+        <div>h' = (1-z)⊙h + z⊙h̃</div>
+    </div>
+
+    <div class="controls">
+        <button id="playBtn" onclick="togglePlay()">Play</button>
+        <button onclick="step()">Step</button>
+        <button onclick="reset()">Reset</button>
+        <div class="speed-control">
+            <label>Speed:</label>
+            <input type="range" id="speed" min="100" max="1500" value="700">
+        </div>
+    </div>
+
+    <div class="sequence-container" id="sequenceContainer">
+    </div>
+
+    <div class="state-display">
+        <div class="state-box">
+            <div class="state-label">Hidden State (h)</div>
+            <div class="state-value" id="hiddenState">0.000</div>
+        </div>
+        <div class="state-box">
+            <div class="state-label">Current Input (x)</div>
+            <div class="state-value" id="currentInput">-</div>
+        </div>
+    </div>
+
+    <div class="container" id="gatesContainer">
+        <div class="gate-box" id="updateGate">
+            <div class="gate-label">Update Gate (z)</div>
+            <div class="gate-formula">σ(Wz·[h,x])</div>
+            <div class="gate-value">?</div>
+        </div>
+        <div class="gate-box" id="resetGate">
+            <div class="gate-label">Reset Gate (r)</div>
+            <div class="gate-formula">σ(Wr·[h,x])</div>
+            <div class="gate-value">?</div>
+        </div>
+        <div class="gate-box" id="candidateState">
+            <div class="gate-label">Candidate (h̃)</div>
+            <div class="gate-formula">tanh(W·[r⊙h,x])</div>
+            <div class="gate-value">?</div>
+        </div>
+        <div class="gate-box" id="newHidden">
+            <div class="gate-label">New Hidden (h')</div>
+            <div class="gate-formula">(1-z)⊙h + z⊙h̃</div>
+            <div class="gate-value">?</div>
+        </div>
+    </div>
+
+    <div class="calculation" id="calculation">
+        Click "Play" or "Step" to start.
+    </div>
+
+    <script>
+        const sequence = [0.5, -0.3, 0.8, -0.1, 0.6];
+        let hiddenState = 0;
+        let currentSeqIdx = 0;
+        let currentGateIdx = 0;
+        let isPlaying = false;
+        let intervalId = null;
+
+        // Simplified weights for demonstration
+        const Wz = 0.5;
+        const Wr = 0.4;
+        const W = 0.6;
+
+        function sigmoid(x) {
+            return 1 / (1 + Math.exp(-x));
+        }
+
+        function renderSequence() {
+            const container = document.getElementById('sequenceContainer');
+            container.innerHTML = '';
+            sequence.forEach((val, idx) => {
+                const item = document.createElement('div');
+                item.className = 'seq-item';
+                item.id = `seq-${idx}`;
+                item.textContent = `t${idx}: ${val}`;
+                container.appendChild(item);
+            });
+        }
+
+        function resetGates() {
+            ['updateGate', 'resetGate', 'candidateState', 'newHidden'].forEach(id => {
+                const el = document.getElementById(id);
+                el.classList.remove('active', 'computed');
+                el.querySelector('.gate-value').textContent = '?';
+            });
+        }
+
+        function computeGRU(x, h) {
+            const z = sigmoid(Wz * (h + x));
+            const r = sigmoid(Wr * (h + x));
+            const hCandidate = Math.tanh(W * (r * h + x));
+            const hNew = (1 - z) * h + z * hCandidate;
+            return { z, r, hCandidate, hNew };
+        }
+
+        function step() {
+            if (currentSeqIdx >= sequence.length) {
+                document.getElementById('calculation').innerHTML = '<div style="font-weight:bold">Sequence Complete</div>';
+                stopPlay();
+                return false;
+            }
+
+            const x = sequence[currentSeqIdx];
+            const h = hiddenState;
+
+            // Update sequence display
+            document.querySelectorAll('.seq-item').forEach((el, idx) => {
+                el.classList.remove('current');
+                if (idx < currentSeqIdx) el.classList.add('processed');
+            });
+            document.getElementById(`seq-${currentSeqIdx}`).classList.add('current');
+            document.getElementById('currentInput').textContent = x.toFixed(3);
+
+            const { z, r, hCandidate, hNew } = computeGRU(x, h);
+
+            if (currentGateIdx === 0) {
+                resetGates();
+            }
+
+            const gates = ['updateGate', 'resetGate', 'candidateState', 'newHidden'];
+            const values = [z, r, hCandidate, hNew];
+            const labels = ['z', 'r', 'h̃', "h'"];
+            const formulas = [
+                `σ(${Wz}×(${h.toFixed(3)}+${x})) = ${z.toFixed(3)}`,
+                `σ(${Wr}×(${h.toFixed(3)}+${x})) = ${r.toFixed(3)}`,
+                `tanh(${W}×(${r.toFixed(3)}×${h.toFixed(3)}+${x})) = ${hCandidate.toFixed(3)}`,
+                `(1-${z.toFixed(3)})×${h.toFixed(3)} + ${z.toFixed(3)}×${hCandidate.toFixed(3)} = ${hNew.toFixed(3)}`
+            ];
+
+            // Update current gate
+            const currentGate = document.getElementById(gates[currentGateIdx]);
+            currentGate.classList.add('active');
+            currentGate.querySelector('.gate-value').textContent = values[currentGateIdx].toFixed(3);
+
+            // Mark previous gates as computed
+            for (let i = 0; i < currentGateIdx; i++) {
+                document.getElementById(gates[i]).classList.remove('active');
+                document.getElementById(gates[i]).classList.add('computed');
+            }
+
+            document.getElementById('calculation').innerHTML = `
+                <div>Time step t=${currentSeqIdx}: x=${x}, h=${h.toFixed(3)}</div>
+                <div>${labels[currentGateIdx]} = ${formulas[currentGateIdx]}</div>
+            `;
+
+            currentGateIdx++;
+
+            if (currentGateIdx >= 4) {
+                // Complete this time step
+                currentGate.classList.remove('active');
+                currentGate.classList.add('computed');
+
+                hiddenState = hNew;
+                document.getElementById('hiddenState').textContent = hNew.toFixed(3);
+                document.getElementById(`seq-${currentSeqIdx}`).classList.remove('current');
+                document.getElementById(`seq-${currentSeqIdx}`).classList.add('processed');
+
+                currentSeqIdx++;
+                currentGateIdx = 0;
+            }
+
+            return currentSeqIdx < sequence.length || currentGateIdx > 0;
+        }
+
+        function togglePlay() {
+            if (isPlaying) {
+                stopPlay();
+            } else {
+                startPlay();
+            }
+        }
+
+        function startPlay() {
+            isPlaying = true;
+            document.getElementById('playBtn').textContent = 'Pause';
+            const speed = 1600 - parseInt(document.getElementById('speed').value);
+            intervalId = setInterval(() => {
+                if (!step()) {
+                    stopPlay();
+                }
+            }, speed);
+        }
+
+        function stopPlay() {
+            isPlaying = false;
+            document.getElementById('playBtn').textContent = 'Play';
+            if (intervalId) {
+                clearInterval(intervalId);
+                intervalId = null;
+            }
+        }
+
+        function reset() {
+            stopPlay();
+            hiddenState = 0;
+            currentSeqIdx = 0;
+            currentGateIdx = 0;
+
+            document.getElementById('hiddenState').textContent = '0.000';
+            document.getElementById('currentInput').textContent = '-';
+
+            renderSequence();
+            resetGates();
+
+            document.getElementById('calculation').innerHTML = 'Click "Play" or "Step" to start.';
+        }
+
+        window.onload = reset;
+    </script>
+</body>
+</html>

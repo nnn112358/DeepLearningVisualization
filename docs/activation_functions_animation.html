@@ -1,0 +1,493 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Activation Functions Animation</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+            background: #fff;
+            padding: 20px;
+            color: #333;
+        }
+        h1 {
+            text-align: center;
+            margin-bottom: 20px;
+            font-weight: 500;
+        }
+        .controls {
+            display: flex;
+            justify-content: center;
+            gap: 10px;
+            margin-bottom: 20px;
+            flex-wrap: wrap;
+            align-items: center;
+        }
+        .setting-group {
+            display: flex;
+            align-items: center;
+            gap: 5px;
+            font-size: 14px;
+        }
+        .setting-group label {
+            color: #666;
+        }
+        .setting-group select {
+            padding: 6px 12px;
+            border: 1px solid #ccc;
+            border-radius: 4px;
+            background: #fff;
+            font-size: 14px;
+        }
+        button {
+            padding: 8px 16px;
+            font-size: 14px;
+            border: 1px solid #ccc;
+            border-radius: 4px;
+            cursor: pointer;
+            background: #fff;
+        }
+        button:hover {
+            background: #f0f0f0;
+        }
+        .container {
+            display: flex;
+            flex-wrap: wrap;
+            justify-content: center;
+            gap: 40px;
+            margin-bottom: 20px;
+        }
+        .graph-container {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+        }
+        .graph-label {
+            font-size: 14px;
+            margin-bottom: 8px;
+            color: #666;
+        }
+        canvas {
+            border: 1px solid #ddd;
+            background: #fafafa;
+        }
+        .matrix-container {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+        }
+        .matrix-label {
+            font-size: 14px;
+            margin-bottom: 8px;
+            color: #666;
+        }
+        .matrix {
+            display: grid;
+            gap: 1px;
+            background: #ddd;
+            padding: 1px;
+        }
+        .cell {
+            width: 50px;
+            height: 36px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 11px;
+            background: #f5f5f5;
+        }
+        .input-cell.highlight {
+            background: #ffcccc;
+        }
+        .output-cell.computed {
+            background: #ccffcc;
+        }
+        .output-cell.current {
+            background: #ffffcc;
+        }
+        .calculation {
+            text-align: center;
+            padding: 15px;
+            background: #f9f9f9;
+            border: 1px solid #eee;
+            margin: 20px auto;
+            max-width: 700px;
+            font-family: monospace;
+            font-size: 13px;
+            line-height: 1.6;
+        }
+        .formula {
+            text-align: center;
+            padding: 10px;
+            background: #f0f8ff;
+            border: 1px solid #ddd;
+            margin: 10px auto;
+            max-width: 500px;
+            font-family: monospace;
+            font-size: 14px;
+        }
+        .speed-control {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            font-size: 14px;
+            color: #666;
+        }
+        .speed-control input {
+            width: 80px;
+        }
+    </style>
+</head>
+<body>
+    <h1>Activation Functions Animation</h1>
+
+    <div class="controls">
+        <div class="setting-group">
+            <label>Function:</label>
+            <select id="activationFunc" onchange="changeFunction()">
+                <option value="relu">ReLU</option>
+                <option value="leakyrelu">LeakyReLU</option>
+                <option value="elu">ELU</option>
+                <option value="prelu">PReLU</option>
+                <option value="sigmoid">Sigmoid</option>
+                <option value="hardsigmoid">HardSigmoid</option>
+                <option value="tanh">Tanh</option>
+                <option value="softmax">Softmax</option>
+                <option value="swish">Swish</option>
+                <option value="hardswish">HardSwish</option>
+            </select>
+        </div>
+        <button id="playBtn" onclick="togglePlay()">Play</button>
+        <button onclick="step()">Step</button>
+        <button onclick="reset()">Reset</button>
+        <div class="speed-control">
+            <label>Speed:</label>
+            <input type="range" id="speed" min="100" max="1500" value="500">
+        </div>
+    </div>
+
+    <div class="formula" id="formula">f(x) = max(0, x)</div>
+
+    <div class="container">
+        <div class="graph-container">
+            <div class="graph-label">Function Graph</div>
+            <canvas id="graphCanvas" width="300" height="300"></canvas>
+        </div>
+        <div class="matrix-container">
+            <div class="matrix-label">Input</div>
+            <div id="inputMatrix" class="matrix"></div>
+        </div>
+        <div class="matrix-container">
+            <div class="matrix-label">Output</div>
+            <div id="outputMatrix" class="matrix"></div>
+        </div>
+    </div>
+
+    <div class="calculation" id="calculation">
+        Click "Play" or "Step" to start.
+    </div>
+
+    <script>
+        const activationFunctions = {
+            relu: {
+                formula: 'f(x) = max(0, x)',
+                fn: x => Math.max(0, x),
+                range: [-3, 3]
+            },
+            leakyrelu: {
+                formula: 'f(x) = x if x > 0 else 0.01x',
+                fn: x => x > 0 ? x : 0.01 * x,
+                range: [-3, 3]
+            },
+            elu: {
+                formula: 'f(x) = x if x > 0 else α(e^x - 1), α=1',
+                fn: x => x > 0 ? x : Math.exp(x) - 1,
+                range: [-3, 3]
+            },
+            prelu: {
+                formula: 'f(x) = x if x > 0 else αx, α=0.25',
+                fn: x => x > 0 ? x : 0.25 * x,
+                range: [-3, 3]
+            },
+            sigmoid: {
+                formula: 'f(x) = 1 / (1 + e^(-x))',
+                fn: x => 1 / (1 + Math.exp(-x)),
+                range: [-5, 5]
+            },
+            hardsigmoid: {
+                formula: 'f(x) = max(0, min(1, (x+3)/6))',
+                fn: x => Math.max(0, Math.min(1, (x + 3) / 6)),
+                range: [-5, 5]
+            },
+            tanh: {
+                formula: 'f(x) = (e^x - e^(-x)) / (e^x + e^(-x))',
+                fn: x => Math.tanh(x),
+                range: [-3, 3]
+            },
+            softmax: {
+                formula: 'f(xi) = e^xi / Σe^xj',
+                fn: null,
+                range: [-3, 3]
+            },
+            swish: {
+                formula: 'f(x) = x × sigmoid(x)',
+                fn: x => x / (1 + Math.exp(-x)),
+                range: [-5, 5]
+            },
+            hardswish: {
+                formula: 'f(x) = x × max(0, min(1, (x+3)/6))',
+                fn: x => x * Math.max(0, Math.min(1, (x + 3) / 6)),
+                range: [-5, 5]
+            }
+        };
+
+        let inputData = [];
+        let outputData = [];
+        const rows = 4;
+        const cols = 4;
+        let currentIdx = 0;
+        let isPlaying = false;
+        let intervalId = null;
+        let currentFunc = 'relu';
+
+        function generateInput() {
+            inputData = [];
+            for (let i = 0; i < rows; i++) {
+                inputData[i] = [];
+                for (let j = 0; j < cols; j++) {
+                    inputData[i][j] = (Math.random() * 6 - 3).toFixed(2);
+                }
+            }
+        }
+
+        function softmax(arr) {
+            const flat = arr.flat().map(Number);
+            const maxVal = Math.max(...flat);
+            const exps = flat.map(x => Math.exp(x - maxVal));
+            const sum = exps.reduce((a, b) => a + b, 0);
+            return exps.map(e => e / sum);
+        }
+
+        function applyActivation(x) {
+            const fn = activationFunctions[currentFunc].fn;
+            if (fn) {
+                return fn(Number(x));
+            }
+            return Number(x);
+        }
+
+        function changeFunction() {
+            currentFunc = document.getElementById('activationFunc').value;
+            document.getElementById('formula').textContent = activationFunctions[currentFunc].formula;
+            reset();
+            drawGraph();
+        }
+
+        function drawGraph() {
+            const canvas = document.getElementById('graphCanvas');
+            const ctx = canvas.getContext('2d');
+            const w = canvas.width;
+            const h = canvas.height;
+
+            ctx.clearRect(0, 0, w, h);
+
+            const [xMin, xMax] = activationFunctions[currentFunc].range;
+            const padding = 30;
+            const graphW = w - 2 * padding;
+            const graphH = h - 2 * padding;
+
+            // Draw axes
+            ctx.strokeStyle = '#ccc';
+            ctx.lineWidth = 1;
+
+            // X axis
+            const yZero = padding + graphH / 2;
+            ctx.beginPath();
+            ctx.moveTo(padding, yZero);
+            ctx.lineTo(w - padding, yZero);
+            ctx.stroke();
+
+            // Y axis
+            const xZero = padding + graphW * (-xMin) / (xMax - xMin);
+            ctx.beginPath();
+            ctx.moveTo(xZero, padding);
+            ctx.lineTo(xZero, h - padding);
+            ctx.stroke();
+
+            // Draw function
+            ctx.strokeStyle = '#4a90d9';
+            ctx.lineWidth = 2;
+            ctx.beginPath();
+
+            const fn = activationFunctions[currentFunc].fn;
+            if (fn) {
+                for (let px = 0; px <= graphW; px++) {
+                    const x = xMin + (px / graphW) * (xMax - xMin);
+                    const y = fn(x);
+                    const py = graphH / 2 - y * (graphH / (xMax - xMin)) + padding;
+                    if (px === 0) {
+                        ctx.moveTo(padding + px, py);
+                    } else {
+                        ctx.lineTo(padding + px, py);
+                    }
+                }
+                ctx.stroke();
+            } else if (currentFunc === 'softmax') {
+                ctx.font = '12px sans-serif';
+                ctx.fillStyle = '#666';
+                ctx.textAlign = 'center';
+                ctx.fillText('Softmax: Transforms vector', w/2, h/2 - 10);
+                ctx.fillText('to probability distribution', w/2, h/2 + 10);
+            }
+
+            // Labels
+            ctx.font = '10px sans-serif';
+            ctx.fillStyle = '#666';
+            ctx.textAlign = 'center';
+            ctx.fillText(xMin, padding, h - 10);
+            ctx.fillText(xMax, w - padding, h - 10);
+            ctx.fillText('x', w - 15, yZero - 5);
+            ctx.fillText('y', xZero + 10, padding + 10);
+        }
+
+        function renderMatrices() {
+            const inputMatrix = document.getElementById('inputMatrix');
+            inputMatrix.style.gridTemplateColumns = `repeat(${cols}, 50px)`;
+            inputMatrix.innerHTML = '';
+            for (let i = 0; i < rows; i++) {
+                for (let j = 0; j < cols; j++) {
+                    const cell = document.createElement('div');
+                    cell.className = 'cell input-cell';
+                    cell.id = `input-${i}-${j}`;
+                    cell.textContent = inputData[i][j];
+                    inputMatrix.appendChild(cell);
+                }
+            }
+
+            const outputMatrix = document.getElementById('outputMatrix');
+            outputMatrix.style.gridTemplateColumns = `repeat(${cols}, 50px)`;
+            outputMatrix.innerHTML = '';
+            for (let i = 0; i < rows; i++) {
+                for (let j = 0; j < cols; j++) {
+                    const cell = document.createElement('div');
+                    cell.className = 'cell output-cell';
+                    cell.id = `output-${i}-${j}`;
+                    cell.textContent = '?';
+                    outputMatrix.appendChild(cell);
+                }
+            }
+
+            outputData = [];
+            for (let i = 0; i < rows; i++) {
+                outputData[i] = [];
+                for (let j = 0; j < cols; j++) {
+                    outputData[i][j] = null;
+                }
+            }
+        }
+
+        function step() {
+            if (currentIdx >= rows * cols) {
+                document.getElementById('calculation').innerHTML = '<div style="font-weight:bold">Complete</div>';
+                stopPlay();
+                return false;
+            }
+
+            const i = Math.floor(currentIdx / cols);
+            const j = currentIdx % cols;
+
+            // Highlight
+            document.querySelectorAll('.input-cell').forEach(c => c.classList.remove('highlight'));
+            document.querySelectorAll('.output-cell').forEach(c => c.classList.remove('current'));
+
+            const inputCell = document.getElementById(`input-${i}-${j}`);
+            inputCell.classList.add('highlight');
+
+            const outputCell = document.getElementById(`output-${i}-${j}`);
+            outputCell.classList.add('current');
+
+            // Compute
+            let result;
+            if (currentFunc === 'softmax') {
+                if (currentIdx === 0) {
+                    const softmaxResult = softmax(inputData);
+                    for (let ii = 0; ii < rows; ii++) {
+                        for (let jj = 0; jj < cols; jj++) {
+                            outputData[ii][jj] = softmaxResult[ii * cols + jj].toFixed(3);
+                        }
+                    }
+                }
+                result = outputData[i][j];
+            } else {
+                result = applyActivation(inputData[i][j]).toFixed(3);
+                outputData[i][j] = result;
+            }
+
+            outputCell.textContent = result;
+            outputCell.classList.add('computed');
+
+            const inputVal = inputData[i][j];
+            document.getElementById('calculation').innerHTML = `
+                <div>Input[${i}][${j}] = ${inputVal}</div>
+                <div>${activationFunctions[currentFunc].formula.replace('f(x)', `f(${inputVal})`)}</div>
+                <div style="font-weight:bold">= ${result}</div>
+            `;
+
+            currentIdx++;
+            return currentIdx < rows * cols;
+        }
+
+        function togglePlay() {
+            if (isPlaying) {
+                stopPlay();
+            } else {
+                startPlay();
+            }
+        }
+
+        function startPlay() {
+            isPlaying = true;
+            document.getElementById('playBtn').textContent = 'Pause';
+            const speed = 1600 - parseInt(document.getElementById('speed').value);
+            intervalId = setInterval(() => {
+                if (!step()) {
+                    stopPlay();
+                }
+            }, speed);
+        }
+
+        function stopPlay() {
+            isPlaying = false;
+            document.getElementById('playBtn').textContent = 'Play';
+            if (intervalId) {
+                clearInterval(intervalId);
+                intervalId = null;
+            }
+        }
+
+        function reset() {
+            stopPlay();
+            currentIdx = 0;
+            generateInput();
+            renderMatrices();
+            document.querySelectorAll('.input-cell').forEach(c => c.classList.remove('highlight'));
+            document.querySelectorAll('.output-cell').forEach(c => {
+                c.classList.remove('current', 'computed');
+            });
+            document.getElementById('calculation').innerHTML = 'Click "Play" or "Step" to start.';
+        }
+
+        window.onload = function() {
+            generateInput();
+            renderMatrices();
+            drawGraph();
+        };
+    </script>
+</body>
+</html>
